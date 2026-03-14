@@ -1,0 +1,5 @@
+outs:
+- md5: db800bd5bd816b49edf8eeae4cc5ac8b
+  size: 191153259
+  hash: md5
+  path: clinvar.vcf.gz
