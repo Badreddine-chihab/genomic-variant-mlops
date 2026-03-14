@@ -1,0 +1,5 @@
+outs:
+- md5: 4940e8369723293c5f68cfc29d2e71eb
+  size: 102930019
+  hash: md5
+  path: dbsnp_frequencies.csv
