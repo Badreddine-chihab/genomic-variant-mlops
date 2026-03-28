@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from xgboost import XGBClassifier, callback
+from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import (
     average_precision_score,
@@ -13,7 +13,6 @@ from sklearn.metrics import (
 import mlflow
 import mlflow.xgboost
 import os
-
 
 def find_best_threshold(y_true, y_probs):
     thresholds = np.linspace(0.05, 0.95, 50)
@@ -30,28 +29,38 @@ def find_best_threshold(y_true, y_probs):
 
     return best_thresh, best_f1
 
-
 def train_model(data_path):
+    print("🚀 Training optimized model with RTX 4070 GPU...")
 
-    print("🚀 Training optimized model...")
+    # Ensure the script runs from its own directory to resolve relative paths
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(script_dir)
 
+    print(f"Loading data from: {data_path}")
     df = pd.read_parquet(data_path)
 
     # -----------------------------
-    # Ensure categorical types
+    # Ensure categorical types for XGBoost
     # -----------------------------
-    for col in df.select_dtypes(include=['object']).columns:
-        df[col] = df[col].astype('category')
-
-    if df['CHROM'].dtype != 'category':
-        df['CHROM'] = df['CHROM'].astype('category')
+    cat_cols = ["CHROM", "REF_Base", "ALT_Base", "mutation_type"]
+    for col in cat_cols:
+        if col in df.columns:
+            df[col] = df[col].astype('category')
 
     print("\n📊 Data Overview:")
     print(df.dtypes)
     print(f"\nShape: {df.shape}")
 
-    X = df.drop(columns=["Target"])
-    y = df["Target"]
+    # -----------------------------
+    # Smart Target Column Detection
+    # -----------------------------
+    target_col = "Target" if "Target" in df.columns else "target"
+    
+    if target_col not in df.columns:
+        raise KeyError(f"Target column missing! Available columns: {df.columns.tolist()}")
+
+    X = df.drop(columns=[target_col])
+    y = df[target_col]
 
     # -----------------------------
     # Split data
@@ -75,35 +84,38 @@ def train_model(data_path):
     print(f"\n⚖️ scale_pos_weight: {scale_pos_weight:.2f}")
 
     # -----------------------------
-    # Model
+    # Model Setup (GPU Enabled)
     # -----------------------------
     model = XGBClassifier(
-    enable_categorical=True,
-    tree_method="hist",
-    max_depth=6,
-    n_estimators=1000,
-    learning_rate=0.03,
-    subsample=0.8,
-    colsample_bytree=0.8,
-    scale_pos_weight=scale_pos_weight,
-    eval_metric="aucpr",
-    random_state=42
-)
+        enable_categorical=True,
+        tree_method="hist",
+        device="cuda",  # Triggers the RTX 4070
+        max_depth=6,
+        n_estimators=1000,
+        learning_rate=0.03,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        scale_pos_weight=scale_pos_weight,
+        eval_metric="aucpr",
+        early_stopping_rounds=50, # Stops training if validation stops improving
+        random_state=42
+    )
 
+    mlflow.set_tracking_uri("file:///home/badr/genomic-variant-mlops/mlruns")
     mlflow.set_experiment("genomic-variant-classification")
 
     with mlflow.start_run():
+        print("\n⚙️ Starting training on GPU...")
 
         # -----------------------------
-        # Training with early stopping
+        # Training
         # -----------------------------
         model.fit(
-                X_train,
-                y_train,
-                eval_set=[(X_val, y_val)],
-               
-                verbose=100
-)
+            X_train,
+            y_train,
+            eval_set=[(X_val, y_val)],
+            verbose=100
+        )
 
         # -----------------------------
         # Predictions
@@ -122,7 +134,6 @@ def train_model(data_path):
 
         precision = precision_score(y_test, y_pred)
         recall = recall_score(y_test, y_pred)
-        f1 = f1_score(y_test, y_pred)
         acc = accuracy_score(y_test, y_pred)
 
         # -----------------------------
@@ -132,7 +143,7 @@ def train_model(data_path):
         print(f"PR-AUC      : {pr_auc:.4f}")
         print(f"ROC-AUC     : {roc_auc:.4f}")
         print(f"Best Thresh : {best_thresh:.3f}")
-        print(f"F1 Score    : {f1:.4f}")
+        print(f"F1 Score    : {best_f1:.4f}")
         print(f"Precision   : {precision:.4f}")
         print(f"Recall      : {recall:.4f}")
         print(f"Accuracy    : {acc:.4f}")
@@ -142,12 +153,14 @@ def train_model(data_path):
         # -----------------------------
         mlflow.log_metric("pr_auc", pr_auc)
         mlflow.log_metric("roc_auc", roc_auc)
-        mlflow.log_metric("f1", f1)
+        mlflow.log_metric("f1", best_f1)
         mlflow.log_metric("precision", precision)
         mlflow.log_metric("recall", recall)
         mlflow.log_metric("accuracy", acc)
         mlflow.log_metric("best_threshold", best_thresh)
 
+        mlflow.log_param("tree_method", "hist")
+        mlflow.log_param("device", "cuda")
         mlflow.log_param("max_depth", 6)
         mlflow.log_param("learning_rate", 0.03)
         mlflow.log_param("scale_pos_weight", scale_pos_weight)
@@ -155,12 +168,11 @@ def train_model(data_path):
         # -----------------------------
         # Save model
         # -----------------------------
-        os.makedirs("models", exist_ok=True)
-        model.save_model("models/model.json")
+        os.makedirs("../model", exist_ok=True)
+        model.save_model("../model/xgboost_gpu_model.json")
         mlflow.xgboost.log_model(model, "model")
 
-    print("\n✅ Training complete!")
-
+    print("\n✅ Training complete! Model saved and logged to MLflow.")
 
 if __name__ == "__main__":
-    train_model("data/processed/genomic_variants_encoded.parquet")
+    train_model("/home/badr/genomic-variant-mlops/data/processed/optimized_training_dataset.parquet")

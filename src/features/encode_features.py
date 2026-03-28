@@ -1,95 +1,167 @@
-import pandas as pd
-import numpy as np
+import polars as pl
 import os
 
-# Longueurs des chromosomes (GRCh38) - Crucial pour la position normalisée
+# -----------------------------
+# Chromosome lengths (GRCh38)
+# -----------------------------
 CHR_LENGTHS = {
     "1":248956422,"2":242193529,"3":198295559,"4":190214555,"5":181538259,
     "6":170805979,"7":159345973,"8":145138636,"9":138394717,"10":133797422,
     "11":135086622,"12":133275309,"13":114364328,"14":107043718,"15":101991189,
     "16":90338345,"17":83257441,"18":80373285,"19":58617616,"20":64444167,
-    "21":46709983,"22":50818468,"X":156040895,"Y":57227415
+    "21":46709983,"22":50818468,"X":156040895,"Y":57227415, "M": 16569
 }
 
 def encode_genetic_features(input_path, output_path):
-    print("🧬 Lancement du Smart Encoding (Version Ingénieur)...")
+    print("🧬 Smart Encoding Pipeline (Polars OOM-Safe Version)")
 
-    # 1. Chargement et Nettoyage de base
-    df = pd.read_csv(input_path)
-    
-    # On supprime tout de suite les colonnes inutiles pour libérer la RAM
-    to_drop = ["population_frequency", "very_rare_variant", "is_C_to_T", 
-               "is_G_to_A", "is_CpG_mutation", "freq_log"]
-    df.drop(columns=to_drop, errors="ignore", inplace=True)
+    # 1. Load and Map Columns
+    column_mapping = {
+        "#chr": "CHROM",
+        "pos(1-based)": "POS",
+        "ref": "REF",
+        "alt": "ALT",
+        "gnomAD_exomes_AF": "ALT_FREQ",
+        "CADD_phred": "CADD",
+        "SIFT_score": "SIFT",
+        "Polyphen2_HDIV_score": "PolyPhen",
+        "target": "Target"
+    }
 
-    # 2. Conversion des types pour économiser 70% de RAM
-    df["Target"] = df["Target"].astype("int8")
-    df["Is_InDel"] = df["Is_InDel"].astype("int8")
-    df["Is_Frameshift"] = df["Is_Frameshift"].astype("int8")
-    df["ALT_FREQ"] = df["ALT_FREQ"].astype("float32").fillna(0)
+    # Reference DataFrame for chromosome lengths (using .lazy() to match input)
+    chr_df = pl.DataFrame({
+        "CHROM": list(CHR_LENGTHS.keys()),
+        "CHR_Length": list(CHR_LENGTHS.values())
+    }).with_columns(pl.col("CHROM").cast(pl.String)).lazy()
 
-    # 3. Logique de Longueur (Delta_Length)
-    # Très important pour les INDELs (ex: AGCT -> ACT = -1)
-    df["Delta_Length"] = (df["ALT"].str.len() - df["REF"].str.len()).astype("int16")
+    # Lazy scan to protect RAM
+    df = pl.scan_parquet(input_path).rename(column_mapping)
 
-    # 4. LOGIQUE SMART INDEL (Anchor + Placeholder)
-    # On évite le piège "A devient A" pour les insertions/délétions
-    ref_anchor = df["REF"].str[0].str.upper()
-    alt_anchor = df["ALT"].str[0].str.upper()
-
-    # Si c'est un INDEL, on utilise le tiret "-"
-    df["REF_Base"] = ref_anchor
-    df["ALT_Base"] = np.where(df["Is_InDel"] == 0, alt_anchor, "-")
-
-    # Création du type de mutation (Substitution vs INDEL)
-    df["mutation_type"] = np.where(
-        df["Is_InDel"] == 0,
-        ref_anchor + "_" + alt_anchor,
-        "INDEL"
+    # 2. Normalize chromosome format and Join Lengths
+    df = (
+        df.with_columns(pl.col("CHROM").str.replace("chr", ""))
+        .join(chr_df, on="CHROM", how="inner")
     )
 
-    # 5. Features d'Interactions (Boost de performance)
-    df["rare_variant"] = (df["ALT_FREQ"] < 0.01).astype("int8")
-    df["Impact_Score"] = (df["Is_Frameshift"] * df["Delta_Length"].abs()).astype("float32")
+    # 3. Derive InDel and Frameshift flags dynamically
+    df = df.with_columns([
+        (pl.col("REF").str.len_bytes() != pl.col("ALT").str.len_bytes()).cast(pl.Int8).alias("Is_InDel"),
+        (pl.col("ALT").str.len_bytes() - pl.col("REF").str.len_bytes()).cast(pl.Int16).alias("Delta_Length")
+    ])
+
+    df = df.with_columns([
+        pl.col("Delta_Length").abs().cast(pl.Int16).alias("indel_size"),
+        ((pl.col("Is_InDel") == 1) & (pl.col("Delta_Length").abs() % 3 != 0)).cast(pl.Int8).alias("Is_Frameshift")
+    ])
+
+    # 4. Base Extraction
+    df = df.with_columns([
+        pl.col("REF").str.slice(0, 1).str.to_uppercase().alias("REF_Base")
+    ])
+
+    df = df.with_columns([
+        pl.when(pl.col("Is_InDel") == 0)
+        .then(pl.col("ALT").str.slice(0, 1).str.to_uppercase())
+        .otherwise(pl.lit("-"))
+        .alias("ALT_Base")
+    ])
+
+    # 5. Mutation Type (Fixed string concatenation)
+    df = df.with_columns([
+        pl.when(pl.col("Is_InDel") == 0)
+        .then(pl.concat_str([pl.col("REF_Base"), pl.lit("_"), pl.col("ALT_Base")]))
+        .otherwise(pl.lit("INDEL"))
+        .alias("mutation_type")
+    ])
+
+    # 6. Frequency Engineering
+    df = df.with_columns([
+        (pl.col("ALT_FREQ") + 1.0).log().cast(pl.Float32).alias("freq_log"),
+        (pl.col("ALT_FREQ") < 0.005).cast(pl.Int8).alias("rare_variant"),
+        (pl.col("ALT_FREQ") < 0.001).cast(pl.Int8).alias("is_ultra_rare"),
+        (pl.col("indel_size") > 5).cast(pl.Int8).alias("is_large_indel")
+    ])
+
+    # 7. VEP-derived features (Fixed null filling with floats)
+    df = df.with_columns([
+        (pl.col("CADD").fill_null(0.0) > 20).cast(pl.Int8).alias("CADD_high"),
+        (pl.col("CADD").fill_null(0.0) > 30).cast(pl.Int8).alias("CADD_very_high"),
+        (pl.col("SIFT").fill_null(1.0) < 0.05).cast(pl.Int8).alias("SIFT_damaging"),
+        (pl.col("PolyPhen").fill_null(0.0) > 0.8).cast(pl.Int8).alias("PolyPhen_damaging"),
+    ])
     
-    # Cette colonne aide l'IA à se focus sur les mutations rares et graves
-    df["rare_impact"] = (df["rare_variant"] * df["Impact_Score"]).astype("float32")
+    df = df.with_columns([
+        (pl.col("CADD").fill_null(0.0) * pl.col("rare_variant")).cast(pl.Float32).alias("CADD_x_rare")
+    ])
 
-    # 6. Positionnement Génomique
-    df["CHR_Length"] = df["CHROM"].astype(str).map(CHR_LENGTHS)
-    df = df.dropna(subset=["CHR_Length"]) # On enlève les chromosomes inconnus
-    
-    df["normalized_pos"] = (df["POS"] / df["CHR_Length"]).astype("float32")
-    df["pos_bin"] = pd.qcut(df["POS"], q=10, labels=False, duplicates="drop").astype("int8")
+    # 8. Impact Score
+    df = df.with_columns([
+        (
+            pl.col("Is_Frameshift") * 3 +
+            pl.col("is_large_indel") * 2 +
+            pl.col("indel_size") * 0.1 +
+            pl.col("is_ultra_rare") * 2 +
+            pl.col("CADD_high") * 2
+        ).cast(pl.Float32).alias("Impact_Score")
+    ])
 
-    # 7. Transition / Transversion (Uniquement pour les substitutions)
-    transition_pairs = {"A_G","G_A","C_T","T_C"}
-    mut_pair = ref_anchor + "_" + alt_anchor
-    df["is_transition"] = (mut_pair.isin(transition_pairs) & (df["Is_InDel"] == 0)).astype("int8")
-    df["is_transversion"] = ((~mut_pair.isin(transition_pairs)) & (df["Is_InDel"] == 0)).astype("int8")
+    df = df.with_columns([
+        (pl.col("rare_variant") * pl.col("Impact_Score")).cast(pl.Float32).alias("rare_impact")
+    ])
 
-    # 8. Passage au format CATÉGORIEL NATIF (Le secret anti-crash)
-    # On ne fait PLUS de One-Hot (get_dummies), on laisse XGBoost gérer
+    # 9. Genomic Position Features
+    df = df.with_columns([
+        (pl.col("POS") / pl.col("CHR_Length")).cast(pl.Float32).alias("normalized_pos")
+    ])
+
+    # Fixed qcut by replacing it with mathematical decile binning
+    df = df.with_columns([
+        (
+            (pl.col("POS").rank("ordinal") - 1) / pl.col("POS").count() * 10
+        ).cast(pl.Int8).over("CHROM").alias("pos_bin"),
+        
+        (pl.col("normalized_pos") * pl.col("freq_log")).cast(pl.Float32).alias("pos_freq_interaction")
+    ])
+
+    # 10. Transition / Transversion
+    transition_pairs = ["A_G", "G_A", "C_T", "T_C"]
+    df = df.with_columns([
+        (pl.col("mutation_type").is_in(transition_pairs)).cast(pl.Int8).alias("is_transition"),
+        (~pl.col("mutation_type").is_in(transition_pairs) & (pl.col("Is_InDel") == 0)).cast(pl.Int8).alias("is_transversion")
+    ])
+
+    # 11. Chromosome-level stats
+    df = df.with_columns([
+        pl.col("ALT_FREQ").mean().over("CHROM").cast(pl.Float32).alias("chrom_freq_mean"),
+        pl.col("rare_variant").mean().over("CHROM").cast(pl.Float32).alias("chrom_rare_rate")
+    ])
+
+    # 12. Categorical Encoding & Cleanup
     cat_cols = ["CHROM", "REF_Base", "ALT_Base", "mutation_type"]
-    for col in cat_cols:
-        df[col] = df[col].astype("category")
+    df = df.with_columns([pl.col(c).cast(pl.Categorical) for c in cat_cols])
 
-    # 9. Nettoyage final des colonnes brutes (Texte)
-    df.drop(columns=["REF", "ALT", "POS", "CHR_Length"], errors="ignore", inplace=True)
+    df = df.drop(["REF", "ALT", "POS", "CHR_Length"])
 
-    # 10. Sauvegarde en PARQUET (Conserve les types de données mieux que le CSV)
-    df.to_parquet(output_path, index=False)
+    # 13. Execute Pipeline and Save
+    print("Executing transformations and writing to disk...")
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    
+    final_df = df.collect()
+    final_df.write_parquet(output_path)
 
-    print(f"✅ Encodage terminé avec succès !")
-    print(f"📊 Dataset final : {df.shape[0]} lignes | {df.shape[1]} colonnes")
-    print(f"💾 Fichier sauvegardé : {output_path}")
+    print("\n📊 FINAL DATASET INFO:")
+    print(f"Rows: {final_df.height}")
+    print(f"Columns: {final_df.width}")
+    print(f"\n✅ Saved to: {output_path}")
 
 if __name__ == "__main__":
-    # Assure-toi que les chemins sont corrects pour ton WSL2
-    RAW_PATH = "/home/badr/genomic-variant-mlops/data/processed/final_training_dataset.csv"
-    OUT_PATH = "data/processed/genomic_variants_encoded.parquet"
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(script_dir)
+    
+    RAW_PATH = "/home/badr/genomic-variant-mlops/data/processed/model_ready_dataset.parquet"
+    OUT_PATH = "/home/badr/genomic-variant-mlops/data/processed/final_training_dataset.parquet"
     
     if os.path.exists(RAW_PATH):
         encode_genetic_features(RAW_PATH, OUT_PATH)
     else:
-        print(f"❌ Erreur : Fichier introuvable à {RAW_PATH}")
+        print(f"❌ File not found: {RAW_PATH}")

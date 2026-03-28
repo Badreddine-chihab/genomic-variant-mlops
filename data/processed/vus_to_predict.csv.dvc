@@ -1,5 +1,0 @@
-outs:
-- md5: 469e6a948551fc58f5e2eba867ac95db
-  size: 73569316
-  hash: md5
-  path: vus_to_predict.csv
