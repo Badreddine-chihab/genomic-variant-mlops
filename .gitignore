@@ -211,16 +211,10 @@ __marimo__/
 venv/
 __pycache__/
 
-# Data
-data/
-*.csv
-*.parquet
-*.gz
-*.vcf
+
 
 # Models and Tracking
 models/
-*.json
 mlruns/
 *.db
 

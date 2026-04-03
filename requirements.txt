@@ -11,6 +11,7 @@ seaborn==0.12.2
 plotly==5.16.0
 joblib==1.3.2
 psutil==5.9.5
+awscli==3.13.12
 
 # Optional (GPU build may require a specific xgboost wheel built with CUDA)
 # If using CUDA/XGBoost GPU, ensure system CUDA and a matching xgboost GPU build are installed.

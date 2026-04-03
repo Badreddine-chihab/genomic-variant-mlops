@@ -1,0 +1,6 @@
+outs:
+- md5: cef847ba281c07b48b41431fe11cf1d0.dir
+  size: 38969747558
+  nfiles: 37
+  hash: md5
+  path: dbNSFP_extracted
