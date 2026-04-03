@@ -10,36 +10,39 @@ This script:
 
 import os
 import mlflow
-from mlflow.entities import MetricHistory
 from datetime import datetime
 
 # MLflow tracking URI
 TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "file:///home/badr/genomic-variant-mlops/mlruns")
 mlflow.set_tracking_uri(TRACKING_URI)
 
-def get_best_run(metric_name="f1", ascending=False):
-    """Find the best run across all experiments by metric."""
-    all_runs = []
+def get_best_run(metric_name="pr_auc", ascending=False):
+    """Find the best run across all experiments by metric.
     
-    # Iterate through all experiments
-    for exp in mlflow.search_experiments():
-        runs = mlflow.search_runs(
-            experiment_ids=[exp.experiment_id],
-            order_by=[f"metrics.{metric_name} {'DESC' if not ascending else 'ASC'}"]
-        )
-        all_runs.extend(runs)
+    Defaults to PR-AUC which is better for imbalanced genomic variant classification.
+    """
     
-    if not all_runs:
+    # Use MLflow client to search for best run
+    client = mlflow.tracking.MlflowClient(tracking_uri=TRACKING_URI)
+    
+    # Get all experiment IDs
+    experiments = client.search_experiments()
+    experiment_ids = [exp.experiment_id for exp in experiments]
+    
+    if not experiment_ids:
+        raise ValueError("No experiments found")
+    
+    # Search all runs across all experiments, ordered by metric
+    runs = client.search_runs(
+        experiment_ids=experiment_ids,
+        order_by=[f"metrics.{metric_name} {'ASC' if ascending else 'DESC'}"],
+        max_results=1
+    )
+    
+    if not runs:
         raise ValueError(f"No runs found with metric '{metric_name}'")
     
-    # Sort by metric and return best
-    best_run = sorted(
-        all_runs, 
-        key=lambda x: x.data.metrics.get(metric_name, 0),
-        reverse=(not ascending)
-    )[0]
-    
-    return best_run
+    return runs[0]
 
 
 def register_model_to_registry(run, model_name, stage="Staging", description=""):
@@ -70,34 +73,32 @@ def register_model_to_registry(run, model_name, stage="Staging", description="")
         
         print(f"✅ Model registered: {model_name} (v{model_version.version})")
         
-        # Transition to stage
+        # Transition to stage (note: stages are deprecated in MLflow 2.9+)
         client = mlflow.tracking.MlflowClient(tracking_uri=TRACKING_URI)
-        client.transition_model_version_stage(
-            name=model_name,
-            version=model_version.version,
-            stage=stage,
-            description=description
-        )
+        try:
+            client.transition_model_version_stage(
+                name=model_name,
+                version=model_version.version,
+                stage=stage
+            )
+            print(f"✅ Model transitioned to: {stage}")
+        except Exception as stage_error:
+            print(f"⚠️  Could not transition stage: {stage_error}")
         
-        print(f"✅ Model transitioned to: {stage}")
-        
-        # Log metrics
-        metrics = run.data.metrics
-        print(f"\n📊 Model Metrics:")
-        for metric_name, value in sorted(metrics.items()):
-            print(f"   {metric_name}: {value:.4f}")
+        print(f"\n📊 Model Successfully Registered!")
+        print(f"   PR-AUC: {run.data.metrics.get('pr_auc', 'N/A'):.4f}")
+        print(f"   ROC-AUC: {run.data.metrics.get('roc_auc', 'N/A'):.4f}")
         
         return model_version
         
     except mlflow.exceptions.RestException as e:
         if "already exists" in str(e):
-            print(f"⚠️  Model '{model_name}' already exists. Creating new version...")
-            # Get latest version
+            print(f"⚠️  Model '{model_name}' already exists. Version already created.")
             client = mlflow.tracking.MlflowClient(tracking_uri=TRACKING_URI)
             versions = client.search_model_versions(f"name='{model_name}'")
             if versions:
-                latest = max(versions, key=lambda x: x.version)
-                print(f"   Latest version: v{latest.version} in stage '{latest.current_stage}'")
+                latest = max(versions, key=lambda x: int(x.version))
+                print(f"   Latest version: v{latest.version}")
         raise
 
 
@@ -107,14 +108,15 @@ def main():
     print("=" * 60)
     
     try:
-        # Find best model by F1 score
-        best_run = get_best_run(metric_name="f1", ascending=False)
+        # Find best model by PR-AUC score (better for imbalanced data)
+        best_run = get_best_run(metric_name="pr_auc", ascending=False)
         
         print(f"\n🏆 Best Run Found:")
         print(f"   Run ID: {best_run.info.run_id}")
-        print(f"   F1 Score: {best_run.data.metrics.get('f1', 'N/A'):.4f}")
-        print(f"   Accuracy: {best_run.data.metrics.get('accuracy', 'N/A'):.4f}")
-        print(f"   ROC-AUC: {best_run.data.metrics.get('roc_auc', 'N/A'):.4f}")
+        if hasattr(best_run, 'data') and hasattr(best_run.data, 'metrics'):
+            print(f"   PR-AUC: {best_run.data.metrics.get('pr_auc', 'N/A'):.4f}")
+            print(f"   ROC-AUC: {best_run.data.metrics.get('roc_auc', 'N/A'):.4f}")
+            print(f"   F1 Score: {best_run.data.metrics.get('f1', 'N/A'):.4f}")
         
         # Register to Model Registry
         model_version = register_model_to_registry(
