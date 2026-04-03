@@ -37,63 +37,13 @@ jobs:
         env:
           MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
         run: |
-          python -c "
-import mlflow
-import os
-import sys
-
-mlflow.set_tracking_uri(os.getenv('MLFLOW_TRACKING_URI'))
-
-# Get best model metrics
-best_run = max(
-    mlflow.search_runs(),
-    key=lambda x: x.data.metrics.get('f1', 0)
-)
-
-metrics = best_run.data.metrics
-f1 = metrics.get('f1', 0)
-accuracy = metrics.get('accuracy', 0)
-roc_auc = metrics.get('roc_auc', 0)
-
-print(f'Model Performance:')
-print(f'  F1 Score: {f1:.4f}')
-print(f'  Accuracy: {accuracy:.4f}')
-print(f'  ROC-AUC: {roc_auc:.4f}')
-
-# Validation thresholds
-if f1 < 0.75:
-    print('⚠️  WARNING: F1 score below 0.75 threshold')
-    sys.exit(1)
-
-print('✅ Model validation passed')
-          "
+          python src/model/validate_model.py
       
       - name: Promote model to Production
         env:
           MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
         run: |
-          python -c "
-import mlflow
-import os
-
-mlflow.set_tracking_uri(os.getenv('MLFLOW_TRACKING_URI'))
-client = mlflow.tracking.MlflowClient()
-
-# Get model registry
-try:
-    model_versions = client.search_model_versions(\"name='genomic-variant-classifier'\")
-    if model_versions:
-        latest = max(model_versions, key=lambda x: x.version)
-        if latest.current_stage == 'Staging':
-            client.transition_model_version_stage(
-                name='genomic-variant-classifier',
-                version=latest.version,
-                stage='Production'
-            )
-            print(f'✅ Promoted v{latest.version} to Production')
-except Exception as e:
-    print(f'ℹ️  Model not yet registered: {e}')
-          "
+          python src/model/promote_model.py
       
       - name: Notify Slack (optional)
         if: failure()
