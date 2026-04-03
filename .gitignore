@@ -221,3 +221,4 @@ mlruns/
 # OS generated files
 .DS_Store
 .wslconfig
+/mlruns
