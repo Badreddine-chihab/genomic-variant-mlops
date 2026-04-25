@@ -1,84 +1,113 @@
 import os
+import sys
+import logging
 import pandas as pd
 import numpy as np
 import mlflow
+from pathlib import Path
 from xgboost import XGBClassifier
-from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.model_selection import StratifiedKFold, cross_validate
+from sklearn.metrics import make_scorer, average_precision_score, roc_auc_score
 
-def evaluate_model_cv(data_path):
-    # 1. Ensure working directory is set to script location
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    os.chdir(script_dir)
+# Import du gestionnaire de configuration centralisé
+from src.orchestration.config_utils import ConfigManager, setup_mlflow
 
-    # 2. Setup MLflow Tracking (Using explicit URI to avoid conflicts)
-    TRACKING_URI = f"file://{os.path.join(script_dir, 'mlruns')}"
-    mlflow.set_tracking_uri(TRACKING_URI)
-    mlflow.set_experiment("genomic-variant-cv-evaluation")
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-    print(f"Loading data from: {data_path}")
+def evaluate_model_cv():
+    """Exécute une Cross-Validation robuste et logue les résultats dans MLflow."""
+    
+    # 1. INITIALISATION CONFIG
+    cm = ConfigManager()
+    cfg = cm.config
+    setup_mlflow(cfg)
+    
+    # Récupération des paramètres depuis training_config.yaml
+    xgb_cfg = cfg.training.xgboost
+    eval_cfg = cfg.training.training # Contient cv_splits
+    
+    data_path = cm.get_path("paths.data.final_training")
+    logger.info(f"🧪 Évaluation par Cross-Validation (GPU)")
+    logger.info(f"📂 Source : {data_path}")
+
+    # 2. CHARGEMENT DES DONNÉES
     df = pd.read_parquet(data_path)
-
-    # 3. Prepare Data
-    cat_cols = ["CHROM", "REF_Base", "ALT_Base", "mutation_type"]
+    
+    # Categorical casting
+    cat_cols = cfg.features.categorical_cols
     for col in cat_cols:
         if col in df.columns:
             df[col] = df[col].astype('category')
 
-    target_col = "Target" if "Target" in df.columns else "target"
-    if target_col not in df.columns:
-        raise KeyError(f"Target column missing! Available columns: {df.columns.tolist()}")
+    target = cfg.features.target_col
+    X = df.drop(columns=[target])
+    y = df[target]
 
-    X = df.drop(columns=[target_col])
-    y = df[target_col]
+    # 3. CONFIGURATION DU MODÈLE GPU
+    # On recalcule le scale_pos_weight sur l'ensemble pour la CV
+    spw = (len(y) - y.sum()) / y.sum()
 
-    # Handle class imbalance for the model parameters
-    scale_pos_weight = (len(y) - sum(y)) / sum(y)
-
-    # 4. Initialize Model (GPU enabled)
     model = XGBClassifier(
-        enable_categorical=True,
-        tree_method="hist",
-        device="cuda",
-        max_depth=6,
-        n_estimators=1000,
-        learning_rate=0.03,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        scale_pos_weight=scale_pos_weight,
-        eval_metric="auc",
+        n_estimators=xgb_cfg.n_estimators,
+        max_depth=xgb_cfg.max_depth,
+        learning_rate=xgb_cfg.learning_rate,
+        tree_method=xgb_cfg.tree_method,
+        device=xgb_cfg.device,
+        enable_categorical=xgb_cfg.enable_categorical,
+        scale_pos_weight=spw,
         random_state=42
     )
 
-    # 5. Run Cross-Validation and Log to MLflow
-    print("Starting 5-Fold Cross Validation on GPU...")
+    # 4. EXÉCUTION DE LA CV
+    n_splits = eval_cfg.get("cv_splits", 5)
+    logger.info(f"🔄 Lancement de la {n_splits}-Fold Cross Validation...")
     
-    with mlflow.start_run(run_name="xgb_5fold_cv"):
-        cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-        
-        # Calculate CV scores
-        scores = cross_val_score(model, X, y, cv=cv, scoring="roc_auc", n_jobs=1)
-        
-        mean_score = scores.mean()
-        std_score = scores.std()
-        
-        print(f"\n🔥 CV ROC-AUC Scores: {scores}")
-        print(f"📈 Mean: {mean_score:.4f} (+/- {std_score:.4f})")
+    # On définit plusieurs métriques pour l'évaluation
+    scoring = {
+        'roc_auc': 'roc_auc',
+        'pr_auc': make_scorer(average_precision_score, response_method='predict_proba'),
+        'accuracy': 'accuracy'
+    }
 
-        # Log parameters to MLflow
-        mlflow.log_param("cv_splits", 5)
-        mlflow.log_param("tree_method", "hist")
-        mlflow.log_param("device", "cuda")
+    with mlflow.start_run(run_name=f"XGB_CV_{n_splits}Fold"):
+        cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
         
-        # Log aggregated metrics to MLflow
-        mlflow.log_metric("roc_auc_mean", mean_score)
-        mlflow.log_metric("roc_auc_std", std_score)
-        
-        # Log individual fold scores to MLflow
-        for i, score in enumerate(scores):
-            mlflow.log_metric(f"roc_auc_fold_{i+1}", score)
+        # cross_validate est plus complet que cross_val_score
+        cv_results = cross_validate(
+            model, X, y, 
+            cv=cv, 
+            scoring=scoring, 
+            return_train_score=False,
+            n_jobs=1 # Obligatoire à 1 pour l'utilisation du GPU
+        )
 
-    print(f"\n✅ Cross-validation complete. Results logged to MLflow at {TRACKING_URI}")
+        # 5. CALCUL ET LOG DES RÉSULTATS
+        metrics_to_log = {}
+        for metric_name in scoring.keys():
+            scores = cv_results[f'test_{metric_name}']
+            mean_s = scores.mean()
+            std_s = scores.std()
+            
+            metrics_to_log[f"{metric_name}_mean"] = mean_s
+            metrics_to_log[f"{metric_name}_std"] = std_s
+            
+            logger.info(f"📈 {metric_name.upper()}: {mean_s:.4f} (+/- {std_s:.4f})")
+            
+            # Log des scores individuels par fold
+            for i, s in enumerate(scores):
+                mlflow.log_metric(f"{metric_name}_fold_{i+1}", s)
+
+        # Log des moyennes finales
+        mlflow.log_metrics(metrics_to_log)
+        mlflow.log_params(xgb_cfg)
+        mlflow.log_param("cv_splits", n_splits)
+
+    logger.info(f"✅ Évaluation terminée. Résultats disponibles dans MLflow.")
 
 if __name__ == "__main__":
-    # Adjust this path if your dataset is located elsewhere
-    evaluate_model_cv("/home/badr/genomic-variant-mlops/data/processed/final_training_dataset.parquet")
+    try:
+        evaluate_model_cv()
+    except Exception as e:
+        logger.error(f"❌ Échec de l'évaluation : {e}")
+        sys.exit(1)

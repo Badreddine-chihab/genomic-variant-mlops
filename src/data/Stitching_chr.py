@@ -2,115 +2,114 @@ import polars as pl
 import glob
 import os
 import shutil
+import logging
+import sys
+from pathlib import Path
+from src.orchestration.config_utils import ConfigManager
 
-# --- 1. SMART PATH CONFIGURATION ---
-# Automatically sets the working directory to where the script is located
-script_dir = os.path.dirname(os.path.abspath(__file__))
-os.chdir(script_dir)
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-# Define the columns needed for the machine learning model
-features = [
+# Colonnes nécessaires pour le modèle
+FEATURES = [
     "#chr", "pos(1-based)", "ref", "alt", 
     "SIFT_score", "Polyphen2_HDIV_score", "CADD_phred", 
     "gnomAD_exomes_AF", "clinvar_clnsig"
 ]
 
-temp_dir = "../processed/temp_streaming"
-final_output = "../processed/model_ready_dataset.parquet"
-
-# Create directories safely
-os.makedirs(temp_dir, exist_ok=True)
-os.makedirs("../processed", exist_ok=True)
-
-gz_files = sorted(glob.glob("dbNSFP4.9a_variant.chr*.gz"))
-
-if not gz_files:
-    print(f"❌ ERROR: No .gz files found in {script_dir}")
-    exit()
-
-print(f"Found {len(gz_files)} files. Starting extraction pipeline...")
-
-# --- 2. EXTRACTION & CLEANING LOOP ---
-for filepath in gz_files:
-    chr_name = filepath.split('.')[2]
-    temp_raw = os.path.join(temp_dir, f"{chr_name}_raw.parquet")
-    temp_clean = os.path.join(temp_dir, f"{chr_name}_clean.parquet")
+def extract_and_stitch_data(cfg):
+    """Extraction et assemblage des chromosomes via Polars Streaming."""
+    # Utilisation du ConfigManager pour résoudre les chemins proprement
+    cm = ConfigManager()
+    raw_dir = cm.get_path("paths.data.raw_dir")
+    processed_dir = cm.get_path("paths.data.processed_dir")
+    final_output = cm.get_path("paths.data.model_ready")
     
-    print(f"Processing {chr_name}...")
-    
-    # STEP A: Stream directly to disk (Bypasses RAM limits & fixes schema crashes)
-    try:
-        (
-            pl.scan_csv(
-                filepath, 
-                separator="\t", 
-                ignore_errors=True, 
-                schema_overrides={
-                    "#chr": pl.String, 
-                    "CADD_phred": pl.String, 
-                    "SIFT_score": pl.String, 
-                    "Polyphen2_HDIV_score": pl.String, 
-                    "gnomAD_exomes_AF": pl.String
-                }
-            )
-            .select(features)
-            .filter(pl.col("clinvar_clnsig").is_not_null() & (pl.col("clinvar_clnsig") != ""))
-            .sink_parquet(temp_raw)
-        )
-    except Exception as e:
-        print(f"   ⚠️ Skipping {chr_name} due to error: {e}")
-        continue
+    temp_dir = processed_dir / "temp_streaming"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    final_output.parent.mkdir(parents=True, exist_ok=True)
 
-    # STEP B: Preprocess the extracted chunk
-    if os.path.exists(temp_raw) and os.path.getsize(temp_raw) > 0:
-        df = pl.read_parquet(temp_raw)
+    # Recherche des fichiers (DVC doit les avoir 'pull' avant ce script)
+    gz_files = sorted(glob.glob(str(raw_dir / "dbNSFP4.9a_variant.chr*.gz")))
+    
+    if not gz_files:
+        logger.error(f"❌ Aucun fichier .gz trouvé dans {raw_dir}. As-tu fait un 'dvc pull' ?")
+        sys.exit(1)
+
+    logger.info(f"🚀 Début du traitement de {len(gz_files)} chromosomes...")
+
+    for filepath in gz_files:
+        chr_name = Path(filepath).name.split('.')[2]
+        temp_raw = temp_dir / f"{chr_name}_raw.parquet"
+        temp_clean = temp_dir / f"{chr_name}_clean.parquet"
         
-        # Encode Target: Pathogenic = 1, Benign = 0
-        df = (
-            df
-            .with_columns(pl.col("clinvar_clnsig").str.to_lowercase().alias("clinvar_lower"))
-            .with_columns([
-                pl.when(pl.col("clinvar_lower").str.contains("pathogenic")).then(1)
-                .when(pl.col("clinvar_lower").str.contains("benign")).then(0)
-                .otherwise(None)
-                .alias("target")
-            ])
-            .filter(pl.col("target").is_not_null())
-        )
+        logger.info(f"📦 Processing {chr_name}...")
 
-        if len(df) > 0:
-            # Clean semicolons from numerical scores
-            cols_to_clean = ["SIFT_score", "Polyphen2_HDIV_score", "CADD_phred", "gnomAD_exomes_AF"]
-            for col in cols_to_clean:
-                df = df.with_columns(
-                    pl.col(col).str.split(";").list.first().cast(pl.Float32, strict=False)
+        try:
+            # STEP A: Streaming CSV -> Parquet (OOM Safe)
+            (
+                pl.scan_csv(
+                    filepath, 
+                    separator="\t", 
+                    ignore_errors=True, 
+                    schema_overrides={
+                        "#chr": pl.String, "CADD_phred": pl.String, 
+                        "SIFT_score": pl.String, "Polyphen2_HDIV_score": pl.String, 
+                        "gnomAD_exomes_AF": pl.String
+                    }
                 )
+                .select(FEATURES)
+                .filter(pl.col("clinvar_clnsig").is_not_null() & (pl.col("clinvar_clnsig") != ""))
+                .sink_parquet(str(temp_raw))
+            )
+
+            # STEP B: Nettoyage et Target Encoding
+            df = pl.read_parquet(str(temp_raw))
+            df = (
+                df.with_columns(pl.col("clinvar_clnsig").str.to_lowercase().alias("clinvar_lower"))
+                .with_columns([
+                    pl.when(pl.col("clinvar_lower").str.contains("pathogenic")).then(1)
+                    .when(pl.col("clinvar_lower").str.contains("benign")).then(0)
+                    .otherwise(None).alias("target")
+                ])
+                .filter(pl.col("target").is_not_null())
+            )
+
+            if len(df) > 0:
+                cols_to_clean = ["SIFT_score", "Polyphen2_HDIV_score", "CADD_phred", "gnomAD_exomes_AF"]
+                for col in cols_to_clean:
+                    df = df.with_columns(
+                        pl.col(col).str.split(";").list.first().cast(pl.Float32, strict=False)
+                    )
+                
+                df = df.with_columns(pl.col("gnomAD_exomes_AF").fill_null(0.0))
+                df = df.drop(["clinvar_clnsig", "clinvar_lower"])
+                df.write_parquet(str(temp_clean))
             
-            # Impute missing frequencies with 0.0 and drop text columns
-            df = df.with_columns(pl.col("gnomAD_exomes_AF").fill_null(0.0))
-            df = df.drop(["clinvar_clnsig", "clinvar_lower"])
-            
-            # Save the clean chunk
-            df.write_parquet(temp_clean)
-            print(f"   -> Saved {len(df)} variants.")
+            temp_raw.unlink() # Libère l'espace disque immédiatement
+
+        except Exception as e:
+            logger.warning(f"⚠️ Erreur sur {chr_name}: {e}")
+            continue
+
+    # --- FINAL STITCHING ---
+    clean_files = sorted(temp_dir.glob("*_clean.parquet"))
+    if clean_files:
+        logger.info(f"🧵 Assemblage final vers : {final_output}")
+        final_df = pl.read_parquet([str(f) for f in clean_files])
+        final_df.write_parquet(str(final_output))
+        logger.info(f"✅ Terminé ! Total rows: {len(final_df)}")
         
-        # Delete the raw temp file to save SSD space
-        os.remove(temp_raw)
+        # LIBÉRATION ESPACE : On supprime les fichiers temporaires
+        shutil.rmtree(str(temp_dir))
+        
+        # OPTIONNEL : Supprimer les .gz originaux pour gagner de la place
+        # for f in gz_files: os.remove(f) 
+    else:
+        logger.error("❌ Échec : Aucun fichier clean n'a été généré.")
+        sys.exit(1)
 
-# --- 3. FINAL STITCHING ---
-clean_files = glob.glob(os.path.join(temp_dir, "*_clean.parquet"))
-
-if not clean_files:
-    print("\n❌ Error: No clean parquet files were created.")
-else:
-    print(f"\nStitching {len(clean_files)} files into the final dataset...")
-    
-    # Read all clean chunks and combine them
-    final_df = pl.read_parquet(clean_files)
-    final_df.write_parquet(final_output)
-    
-    print(f"✅ SUCCESS! Final dataset saved to: {final_output}")
-    print(f"Total model-ready rows: {len(final_df)}")
-    
-    # Clean up the temporary directory
-    shutil.rmtree(temp_dir)
+if __name__ == "__main__":
+    cm = ConfigManager()
+    extract_and_stitch_data(cm.config)

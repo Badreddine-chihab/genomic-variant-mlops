@@ -1,0 +1,37 @@
+# Validation Configuration
+# Model validation thresholds and criteria
+
+validation:
+  # Metric thresholds for model acceptance
+  pr_auc_threshold: 0.96         # Minimum PR-AUC (Precision-Recall AUC)
+  roc_auc_threshold: 0.90     # Minimum ROC-AUC
+  f1_threshold: 0.85             # Minimum F1 score
+  precision_threshold: 0.80      # Minimum precision
+  recall_threshold: 0.80      # Minimum recall
+  
+  # Validation modes
+  strict_mode: false             # If true, ALL thresholds must be met; if false, ANY can fail gracefully
+  
+  # Comparison metrics (for promotion decisions)
+  comparison_metric: pr_auc      # Metric used to compare old vs new models
+  min_improvement: 0.01          # Minimum improvement to promote (1% improvement)
+  
+# Promotion settings
+promotion:
+  auto_promote: false            # If true, automatically promote if validation passes
+  require_manual_approval: true  # If true, require manual step before promotion
+  archive_old_models: true       # Archive old production models before promotion
+  keep_versions: 3               # Keep last N model versions
+
+# Performance monitoring
+monitoring:
+  enable_drift_detection: false  # Placeholder for Phase 6
+  drift_threshold: 0.1           # 10% performance drop triggers alert
+  
+# Logging and reporting
+reporting:
+  generate_validation_report: true
+  report_output_format: json     # json, html, pdf
+  include_confusion_matrix: true
+  include_feature_importance: true
+  include_shap_values: false     # Placeholder for future enhancement

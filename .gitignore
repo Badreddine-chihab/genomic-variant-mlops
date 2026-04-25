@@ -217,6 +217,7 @@ __pycache__/
 models/
 mlruns/
 *.db
+mlflow.db
 
 # OS generated files
 .DS_Store

@@ -1,0 +1,48 @@
+# Paths Configuration
+# All paths relative to project root for portability
+# Resolved at runtime using Path(__file__).parent.parent patterns
+
+# Data paths
+# config/paths_config.yaml
+data:
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  model_ready: "data/processed/model_ready_dataset.parquet" # LA CLÉ MANQUANTE ÉTAIT ICI
+  final_training: "data/processed/final_training_dataset.parquet"
+  optimized: "data/processed/optimized_dataset.parquet"
+
+# Model paths
+model:
+  registry_dir: src/model
+  saved_model_path: src/model/xgboost_gpu_model.json
+  artifacts_dir: mlruns                                   # MLflow artifacts
+  
+# MLflow paths
+mlflow:
+  tracking_dir: mlruns
+  registry_dir: mlruns/models
+  
+# Output paths
+output:
+  logs_dir: logs
+  metrics_dir: logs/metrics
+  plots_dir: logs/plots
+  predictions_dir: output/predictions
+  reports_dir: output/reports
+  
+# Configuration paths
+config:
+  root_dir: config
+  main_config: config/config.yaml
+  
+# Scripts paths
+scripts:
+  data: src/data
+  features: src/features
+  model: src/model
+  orchestration: src/orchestration
+
+# DVC (Data Version Control) paths
+dvc:
+  data_dir: data
+  models_dir: mlruns

@@ -1,0 +1,42 @@
+# Master Configuration File - Version Optimisée
+project:
+  name: genomic-variant-classifier
+  version: "1.1.0"
+  random_seed: 42
+
+# Utilise des chemins relatifs par rapport à la racine du projet
+paths: !load_config paths_config.yaml
+training: !load_config training_config.yaml
+validation: !load_config validation_config.yaml
+aws: !load_config aws_config.yaml
+
+pipeline:
+  mode: training
+  debug: false
+  log_level: INFO
+  # Ne mets pas de chemin absolu ici !
+  log_file: "logs/pipeline.log" 
+
+mlflow:
+  # Utilisation d'une DB locale pour éviter les erreurs de dossiers /home/
+  tracking_uri: ${oc.env:MLFLOW_TRACKING_URI, "sqlite:///mlflow.db"}
+  experiment_name: "genomic_variants_exp"
+  tags:
+    phase: "production"
+    framework: "xgboost"
+
+prefect:
+  enable_notifications: false
+  log_prints: true
+  # On évite l'interpolation OmegaConf ici
+  flow_run_name: "genomic-run" 
+
+data_processing:
+  test_size: 0.2 # On réduit à 20% pour avoir plus de données d'entraînement
+  val_split: 0.5
+  stratified: true
+
+features:
+  categorical_cols: ["CHROM", "REF_Base", "ALT_Base", "mutation_type"]
+  target_col: "Target"
+  imputation_value: -1.0

@@ -1,0 +1,62 @@
+# AWS Configuration
+# S3, DVC remote, and credential settings
+
+aws:
+  # AWS credentials - can be overridden by env vars or AWS profile
+  # Priority: env vars > profile > explicit credentials
+  profile: default                  # AWS profile to use (~/.aws/credentials)
+  region: us-east-1
+  
+  # Option to use explicit credentials (if not using profile)
+  # Recommended: Use env vars AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY instead
+  use_credentials_file: true        # If true, use ~/.aws/credentials
+  # access_key_id: null             # Override via AWS_ACCESS_KEY_ID env var
+  # secret_access_key: null         # Override via AWS_SECRET_ACCESS_KEY env var
+
+# S3 settings
+s3:
+  bucket_name: aws-s3-bucket-pfa-genomic-classification
+  region: us-east-1
+  
+  # Storage paths
+  dvc_storage_path: dvc-storage/
+  data_backup_path: data-backups/
+  models_backup_path: models-backups/
+  
+  # S3 client settings
+  use_ssl: true
+  verify: true
+  max_concurrent_requests: 10
+
+# DVC (Data Version Control) settings
+dvc:
+  # Remote storage configuration
+  remote_name: s3-storage
+  remote_url: s3://aws-s3-bucket-pfa-genomic-classification/dvc-storage
+  
+  # DVC operations
+  auto_pull_before_training: true  # Automatically pull data from S3 before training
+  auto_push_after_processing: false # Don't auto-push; manual control
+  
+  # DVC tracking
+  track_files:
+    - mlruns.dvc
+    - data/raw.dvc
+    - data/processed.dvc
+
+# Data synchronization
+sync:
+  # Sync strategy
+  strategy: pull-on-demand  # Options: pull-on-demand, pull-on-start, sync-continuous
+  
+  # Retry settings
+  max_retries: 3
+  retry_delay_seconds: 5
+  
+  # Timeout settings
+  timeout_seconds: 300  # 5 minutes timeout for S3 operations
+
+# Logging
+logging:
+  enable_s3_debug: false           # Enable debug logging for S3 operations
+  log_credentials: false           # Never log credentials

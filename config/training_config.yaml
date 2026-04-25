@@ -1,0 +1,52 @@
+# Training Configuration
+# XGBoost hyperparameters and training settings
+
+model:
+  type: xgboost  # Can extend to support other model types
+  
+xgboost:
+  # Core hyperparameters
+  max_depth: 6
+  n_estimators: 1000
+  learning_rate: 0.03
+  subsample: 0.8
+  colsample_bytree: 0.8
+  
+  # GPU settings
+  enable_categorical: true
+  tree_method: hist      # GPU histogram-based training
+  device: cuda           # Uses RTX 4070; falls back to cpu if CUDA not available
+  
+  # Training dynamics
+  early_stopping_rounds: 50
+  eval_metric: aucpr     # Precision-Recall AUC (better for imbalanced data)
+  
+  # Regularization
+  gamma: 0              # Min loss reduction for split
+  min_child_weight: 1
+  reg_alpha: 0          # L1 regularization
+  reg_lambda: 1         # L2 regularization
+  
+  # Random state for reproducibility
+  random_state: 42
+  
+  # Scale positive weight (will be computed dynamically during training)
+  scale_pos_weight_auto: true
+
+# Training pipeline settings
+training:
+  verbose: true
+  save_model_locally: true
+  model_output_dir: src/model    # Where to save xgboost_gpu_model.json
+  
+  # Threshold optimization
+  optimize_threshold: true
+  threshold_n_points: 50         # Number of thresholds to test (0.05 to 0.95)
+  
+  # Cross-validation (used in eval.py)
+  cv_splits: 5
+  cv_shuffle: true
+  cv_stratified: true
+  
+  # Batch processing
+  batch_size: null  # null = no batching, process all at once
