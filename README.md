@@ -1,59 +1,75 @@
-# 🧬 Genomic Variant Classification - MLOps
+# 🧬 Genomic Variant Classification - MLOps Pipeline
 
-XGBoost GPU-accelerated classification (pathogenic vs benign) with MLflow tracking.
+This project implements an industrial-grade MLOps pipeline to classify genomic variants (Pathogenic vs Benign). It leverages GPU acceleration for XGBoost, automated orchestration with Prefect 3.0, and full experiment tracking with MLflow.
 
-**Model**: PR-AUC 0.8234 | ROC-AUC 0.8756 | CV 0.8732 ± 0.0054
-
----
-
-## 📚 Docs
-
-- **[GUIDE.md](GUIDE.md)** - Setup & workflows ⭐ START HERE
-- **[ROADMAP.md](ROADMAP.md)** - Progress & phases
-- **[AWS_DVC_SETUP.md](AWS_DVC_SETUP.md)** - Data versioning
-- **[MLFLOW_REGISTRY_SETUP.md](MLFLOW_REGISTRY_SETUP.md)** - Model registry
+## 📊 Model Performance
+Results obtained on the **RTX 4070 GPU** with a dataset of **350k+ variants**:
+- **PR-AUC**: `0.9652` (Primary metric for imbalanced genomic data)
+- **ROC-AUC**: `0.9311`
+- **F1-Score**: `0.8862`
+- **5-Fold Cross-Validation**: `0.9644 ± 0.0002` (Extremely high stability)
+- **Best Classification Threshold**: `0.3255`
 
 ---
 
-## 📁 Structure
-
-```
-src/data/         Extract & clean dbNSFP files
-src/features/     Feature engineering & optimization
-src/model/        Training, evaluation, registry
-data/processed/   Final datasets
-notebooks/        Analysis
-mlruns/           MLflow experiments
-```
+## 🏗️ Technical Stack
+- **Orchestration**: [Prefect 3.0](https://www.prefect.io/) (Task management & caching)
+- **Tracking & Registry**: [MLflow](https://mlflow.org/) (Experiment metadata & model versioning)
+- **Data Engineering**: [Polars](https://pola.rs/) (High-performance Lazy API for large genomic files)
+- **Data Versioning**: [DVC](https://dvc.org/) + **AWS S3** (Remote storage)
+- **Model**: **XGBoost** (GPU-accelerated `hist` tree method)
+- **Explainability**: **SHAP** (Biological feature importance: SIFT, CADD, PolyPhen-2)
 
 ---
 
-## ⚡ 5-Min Start
-
-```bash
-python3 -m venv .venv && source .venv/bin/activate
+## 📁 Project Structure
+```text
+.
+├── config/             # YAML configs (paths, training, aws, validation)
+├── data/               # RAW (DVC-tracked) and Processed datasets
+├── notebooks/          # Exploratory Data Analysis
+├── reports/figures/    # SHAP summary and importance plots
+├── src/
+│   ├── data/           # Chromosome stitching (Streaming)
+│   ├── features/       # Feature encoding & engineering
+│   ├── model/          # Training, Eval (CV), SHAP, Model Manager
+│   └── orchestration/  # Config utilities & AWS S3 logic
+├── run_pipeline.py     # Main Entry Point (Prefect Flow)
+└── requirements.txt    # Project dependencies
+⚡ Quick Start
+1. Environment Setup
+Bash
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
+2. Launch Orchestration Server
+In a separate terminal:
 
-# Full pipeline
-python src/data/Stitching_chr.py
-python src/features/encode_features.py
-python src/features/optimization.py
-python src/model/train_model.py
-python src/model/eval.py
-python src/model/register_model.py
+Bash
+prefect server start
+# View dashboard at [http://127.0.0.1:4200](http://127.0.0.1:4200)
+3. Execute Pipeline
+Bash
+python run_pipeline.py
+Note: The pipeline automatically skips tasks if output files already exist (Smart Caching).
 
-# View results
-mlflow ui
-```
+🏛️ Model Governance (manager.py)
+The pipeline includes an automated governance gate:
 
-See [GUIDE.md](GUIDE.md) for details.
+Validate: Checks if the new model meets the PR-AUC > 0.95 threshold.
+
+Register: Versions the model in the MLflow Model Registry.
+
+Promote: Assigns the @Production alias to the best performing model.
+
+✅ Project Status
+[x] Phase 1-4: Automated Data Engineering & GPU Training.
+
+[x] Phase 5: Prefect Orchestration & SHAP Explainability.
+
+[ ] Phase 6: REST API Deployment (FastAPI).
+
+[ ] Phase 7: GitHub Actions CI/CD Integration.
+
 
 ---
-
-## ✅ Status
-
-- **Phases 1-4**: ✅ Complete
-- **Phase 5**: 🔄 REST API + CI/CD (in progress)
-- **Phase 6**: 📋 Monitoring + A/B testing
-
-See [ROADMAP.md](ROADMAP.md).
