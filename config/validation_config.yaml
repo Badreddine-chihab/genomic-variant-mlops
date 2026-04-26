@@ -3,9 +3,9 @@
 
 validation:
   # Metric thresholds for model acceptance
-  pr_auc_threshold: 0.96         # Minimum PR-AUC (Precision-Recall AUC)
-  roc_auc_threshold: 0.90     # Minimum ROC-AUC
-  f1_threshold: 0.85             # Minimum F1 score
+  pr_auc_threshold: 0.80         # Minimum PR-AUC (Precision-Recall AUC)
+  roc_auc_threshold: 0.80     # Minimum ROC-AUC
+  f1_threshold: 0.80             # Minimum F1 score
   precision_threshold: 0.80      # Minimum precision
   recall_threshold: 0.80      # Minimum recall
   

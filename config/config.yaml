@@ -19,8 +19,8 @@ pipeline:
 
 mlflow:
   # Utilisation d'une DB locale pour éviter les erreurs de dossiers /home/
-  tracking_uri: ${oc.env:MLFLOW_TRACKING_URI, "sqlite:///mlflow.db"}
-  experiment_name: "genomic_variants_exp"
+  tracking_uri: "sqlite:////home/badr/genomic-variant-mlops/mlflow.db"
+  experiment_name: "genomic_pfa"
   tags:
     phase: "production"
     framework: "xgboost"
