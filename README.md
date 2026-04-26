@@ -1,75 +1,152 @@
-# 🧬 Genomic Variant Classification - MLOps Pipeline
+# Prédiction de la Pathogénicité des Variants Génomiques – Pipeline MLOps End-to-End
 
-This project implements an industrial-grade MLOps pipeline to classify genomic variants (Pathogenic vs Benign). It leverages GPU acceleration for XGBoost, automated orchestration with Prefect 3.0, and full experiment tracking with MLflow.
-
-## 📊 Model Performance
-Results obtained on the **RTX 4070 GPU** with a dataset of **350k+ variants**:
-- **PR-AUC**: `0.9652` (Primary metric for imbalanced genomic data)
-- **ROC-AUC**: `0.9311`
-- **F1-Score**: `0.8862`
-- **5-Fold Cross-Validation**: `0.9644 ± 0.0002` (Extremely high stability)
-- **Best Classification Threshold**: `0.3255`
+Optimisation du cycle de vie des modèles de Machine Learning pour la prédiction de pathogénicité des variants génomiques, basé sur la base de données dbNSFP. Ce projet met en œuvre les meilleures pratiques MLOps pour garantir la reproductibilité, la traçabilité et la robustesse du pipeline, de la gestion des données à l’inférence en temps réel.
 
 ---
 
-## 🏗️ Technical Stack
-- **Orchestration**: [Prefect 3.0](https://www.prefect.io/) (Task management & caching)
-- **Tracking & Registry**: [MLflow](https://mlflow.org/) (Experiment metadata & model versioning)
-- **Data Engineering**: [Polars](https://pola.rs/) (High-performance Lazy API for large genomic files)
-- **Data Versioning**: [DVC](https://dvc.org/) + **AWS S3** (Remote storage)
-- **Model**: **XGBoost** (GPU-accelerated `hist` tree method)
-- **Explainability**: **SHAP** (Biological feature importance: SIFT, CADD, PolyPhen-2)
+## Architecture du Pipeline
+
+- **Stockage & Versionnage des Données**
+	- Données brutes stockées sur AWS S3 (~30 Go)
+	- Versionnage local et distant via DVC (Data Version Control) avec hardlinks pour optimiser l’espace disque
+
+- **Orchestration**
+	- Orchestrateur Prefect assurant l’idempotence et l’exécution conditionnelle des étapes (pull DVC, Feature Engineering, entraînement, gouvernance)
+
+- **Modélisation**
+	- Entraînement d’un modèle XGBoost (XGBClassifier) optimisé GPU (NVIDIA RTX 4070)
+
+- **Tracking & Registry**
+	- MLflow avec backend SQLite (mlflow.db) pour le suivi des expériences et le Model Registry
+	- Script de gouvernance promouvant automatiquement le meilleur modèle (F1-Score) en "Production"
+
+- **Service & Déploiement**
+	- API FastAPI chargeant dynamiquement le modèle "Production" depuis MLflow
+	- Endpoint `/predict` pour l’inférence en temps réel (payload JSON)
 
 ---
 
-## 📁 Project Structure
-```text
-.
-├── config/             # YAML configs (paths, training, aws, validation)
-├── data/               # RAW (DVC-tracked) and Processed datasets
-├── notebooks/          # Exploratory Data Analysis
-├── reports/figures/    # SHAP summary and importance plots
-├── src/
-│   ├── data/           # Chromosome stitching (Streaming)
-│   ├── features/       # Feature encoding & engineering
-│   ├── model/          # Training, Eval (CV), SHAP, Model Manager
-│   └── orchestration/  # Config utilities & AWS S3 logic
-├── run_pipeline.py     # Main Entry Point (Prefect Flow)
-└── requirements.txt    # Project dependencies
-⚡ Quick Start
-1. Environment Setup
-Bash
-python -m venv .venv
+## Prérequis
+
+- **Système** : WSL Ubuntu (ou Linux équivalent)
+- **Python** : 3.8+
+- **GPU** : NVIDIA RTX 4070 (ou compatible CUDA)
+- **Pilotes** : CUDA Toolkit & cuDNN installés
+- **Outils** :
+	- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
+	- [DVC](https://dvc.org/doc/install)
+	- [Prefect](https://docs.prefect.io/)
+	- [MLflow](https://mlflow.org/)
+	- [Uvicorn](https://www.uvicorn.org/)
+	- [Git](https://git-scm.com/)
+
+---
+
+## Installation
+
+```bash
+# 1. Cloner le dépôt
+
+cd genomic-variant-mlops
+
+# 2. Créer et activer l’environnement virtuel
+python3 -m venv .venv
 source .venv/bin/activate
+
+# 3. Installer les dépendances Python
+pip install --upgrade pip
 pip install -r requirements.txt
-2. Launch Orchestration Server
-In a separate terminal:
 
-Bash
-prefect server start
-# View dashboard at [http://127.0.0.1:4200](http://127.0.0.1:4200)
-3. Execute Pipeline
-Bash
+# 4. Configurer AWS CLI (accès S3 requis)
+aws configure
+
+# 5. Synchroniser les données (DVC)
+dvc pull -f
+```
+
+---
+
+## Exécution du Pipeline
+
+Lancer l’orchestrateur Prefect pour exécuter l’ensemble du pipeline (data, feature engineering, entraînement, validation, gouvernance) :
+
+```bash
 python run_pipeline.py
-Note: The pipeline automatically skips tasks if output files already exist (Smart Caching).
+```
 
-🏛️ Model Governance (manager.py)
-The pipeline includes an automated governance gate:
+---
 
-Validate: Checks if the new model meets the PR-AUC > 0.95 threshold.
+## Interface de Suivi des Expériences
 
-Register: Versions the model in the MLflow Model Registry.
+Lancer MLflow UI pour visualiser les expériences et le Model Registry (backend SQLite) :
 
-Promote: Assigns the @Production alias to the best performing model.
+```bash
+mlflow ui --backend-store-uri sqlite:///$(pwd)/mlflow.db --default-artifact-root $(pwd)/mlruns
+```
 
-✅ Project Status
-[x] Phase 1-4: Automated Data Engineering & GPU Training.
+Accès via [http://localhost:5000](http://localhost:5000)
 
-[x] Phase 5: Prefect Orchestration & SHAP Explainability.
+---
 
-[ ] Phase 6: REST API Deployment (FastAPI).
+## Lancement de l’API d’Inférence
 
-[ ] Phase 7: GitHub Actions CI/CD Integration.
+Démarrer le serveur FastAPI avec Uvicorn :
 
+```bash
+uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+- Documentation interactive Swagger : [http://localhost:8000/docs](http://localhost:8000/docs)
+
+### Exemple de Requête JSON pour `/predict`
+
+```json
+{
+  "CHROM": "11",
+  "SIFT": 0.1550000011920929,
+  "PolyPhen": 0,
+  "CADD": 1.406000018119812,
+  "ALT_FREQ": 0,
+  "Is_InDel": 0,
+  "Delta_Length": 0,
+  "indel_size": 0,
+  "Is_Frameshift": 0,
+  "REF_Base": "C",
+  "ALT_Base": "T",
+  "mutation_type": "C_T",
+  "freq_log": 0,
+  "rare_variant": 1,
+  "is_ultra_rare": 1,
+  "is_large_indel": 0,
+  "CADD_high": 0,
+  "CADD_very_high": 0,
+  "SIFT_damaging": 0,
+  "PolyPhen_damaging": 0,
+  "CADD_x_rare": 1.406000018119812,
+  "Impact_Score": 2,
+  "rare_impact": 2,
+  "normalized_pos": 0.0014295419678092003,
+  "pos_bin": 0,
+  "pos_freq_interaction": 0,
+  "is_transition": 1,
+  "is_transversion": 0,
+  "chrom_freq_mean": 0.007077359594404697,
+  "chrom_rare_rate": 0.9596304893493652
+}
+```
+
+---
+
+## Notes complémentaires
+
+- Le pipeline est idempotent : chaque étape vérifie la présence des artefacts avant exécution.
+- La gouvernance automatise la promotion du meilleur modèle en production.
+- L’API charge dynamiquement le modèle "Production" depuis MLflow pour garantir la cohérence des prédictions.
+
+---
+
+**Contact** : [Votre Nom] – [Votre Email]  
+**Encadrant** : [Nom de l’encadrant]  
+**Année** : 2026
 
 ---
