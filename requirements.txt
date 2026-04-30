@@ -1,33 +1,32 @@
-# --- Core Data Engine (Polars is king for 3.2M rows) ---
+# --- Core Data Engine ---
 polars>=1.3.0
-pyarrow>=17.0.0       # Meilleur que fastparquet pour Polars
-pandas>=2.2.3         # Version patchée pour les bugs de compilation
+pyarrow>=17.0.0
+pandas>=2.2.3
 numpy>=1.26.0
-matplotlib>=3.9.0    # Pour les visualisations de validation
-shap>=0.42.0            # Pour l'interprétabilité des modèles
+duckdb>=1.0.0          # AJOUTÉ : Crucial pour ton Feature Store
 
-# --- Modeling & ML (GPU Accelerated) ---
-xgboost>=2.1.0        # Support natif CUDA pour ta RTX 4070
+# --- Modeling & ML ---
+xgboost>=2.1.0
 scikit-learn>=1.5.0
 joblib>=1.4.0
 psutil>=5.9.8
+shap>=0.42.0
 
-# --- MLOps & Tracking (Phase 1 & 2) ---
-mlflow>=2.18.0        # Version stable avec Model Registry amélioré
+# --- MLOps & Tracking ---
+mlflow>=2.18.0
 hydra-core>=1.3.2
 omegaconf>=2.3.0
 python-dotenv>=1.0.1
 pydantic>=2.7.0
 
-# --- Orchestration (Phase 2) ---
-prefect>=3.0.0        # Utilise la v3 pour les nouvelles fonctionnalités Cloud
-prefect-aws>=0.5.0
-
-# --- Infrastructure & API ---
-boto3>=1.35.0
-botocore==1.42.82
+# --- Web & UI ---
+streamlit>=1.35.0      # AJOUTÉ : Pour ton interface
 fastapi>=0.111.0
 uvicorn>=0.30.0
+
+# --- Infrastructure ---
+boto3>=1.35.0
+botocore==1.42.82
 
 # --- Visualization & Validation ---
 matplotlib>=3.9.0

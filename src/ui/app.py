@@ -1,3 +1,5 @@
+import os
+
 import streamlit as st
 import pandas as pd
 import polars as pl
@@ -41,7 +43,10 @@ if 'target_variant_df' not in st.session_state:
 # ==========================================
 @st.cache_resource(show_spinner=False)
 def load_mlflow_model():
-    mlflow.set_tracking_uri("http://localhost:5000")
+    import os
+# Utilise l'environnement Docker si disponible, sinon localhost
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5000")
+    mlflow.set_tracking_uri(tracking_uri)
     try:
         return mlflow.pyfunc.load_model("models:/GenomicVariantModel@Production")
     except Exception as e:
@@ -135,7 +140,7 @@ with st.sidebar:
 
 if submit_search:
     with st.spinner("Extraction depuis DuckDB/S3..."):
-        raw_data = fetch_features_from_s3(chrom_in, pos_in)
+        raw_data = fetch_features_from_s3(chrom_in, pos_in, ref_in, alt_in)
         
         if raw_data is not None and not raw_data.empty:
             raw_data['ref_clean'] = raw_data['ref'].astype(str).str.strip().str.upper()

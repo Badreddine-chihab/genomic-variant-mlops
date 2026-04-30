@@ -1,0 +1,19 @@
+# Les monstres de stockage
+.dvc/
+.git/
+.venv/
+venv/
+frontend/
+
+# Les données et bases locales
+data/
+mlruns/
+models/
+notebooks/
+home/
+*.db
+*.duckdb
+
+# Les fichiers de cache
+__pycache__/
+*.pyc
