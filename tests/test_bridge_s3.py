@@ -1,5 +1,5 @@
 import pytest
-from src.bridge import get_s3_connection, fetch_features_from_s3
+from src.ui.scripts.bridge import get_s3_connection, fetch_features_from_s3
 from unittest.mock import patch, MagicMock
 
 def test_get_s3_connection_local():

@@ -1,6 +1,6 @@
 import pytest
 import os
-from src.bridge import predict_variant
+from src.ui.scripts.bridge import predict_variant
 from unittest.mock import patch
 
 @patch('mlflow.pyfunc.load_model')

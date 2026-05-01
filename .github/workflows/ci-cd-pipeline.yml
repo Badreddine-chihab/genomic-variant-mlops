@@ -29,7 +29,7 @@ jobs:
       - name: Run Tests
         # Le || true évite l'exit code 5 si tu n'as pas encore de fichiers tests
         run: |
-          pytest --junitxml=test-results.xml || echo "Aucun test trouvé pour le moment"
+          python -m pytest --junitxml=test-results.xml || echo "Aucun test trouvé pour le moment"
 
   build:
     name: Build Docker Image
