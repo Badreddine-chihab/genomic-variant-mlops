@@ -69,4 +69,4 @@ jobs:
 
       - name: Deploy to AWS ECS
         run: |
-          aws ecs update-service --cluster genopredict-cluster --service streamlit-service --force-new-deployments
+          aws ecs update-service --cluster genopredict-cluster --service streamlit-service --force-new-deployment
