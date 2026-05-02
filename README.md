@@ -1,26 +1,52 @@
 # Genomic Variant MLOps
 
-Production-oriented MLOps project for genomic variant pathogenicity classification using XGBoost, MLflow, and Prefect.
+Clinical-oriented genomic variant pathogenicity project with:
 
-## What This Repo Includes
+- XGBoost model training and evaluation
+- MLflow tracking and model registry
+- FastAPI inference backend
+- React + Bootstrap frontend (multi-page dashboard)
+- VCF upload and batch prediction workflow
 
-- End-to-end pipeline orchestration (`run_pipeline.py`)
-- Feature engineering and model training (`src/features`, `src/model`)
-- MLflow model registry and promotion workflow
-- Streamlit UI and FastAPI inference API (`src/ui`, `src/api`)
+## Current App Stack
 
-## Quick Start
+- Backend API: `src/api/main.py`
+- Frontend: `frontend/` (Vite + React + Bootstrap)
+- MLflow: `Dockerfile.mlflow`
 
-1. Install dependencies:
+Streamlit is kept in repository for reference only and is no longer the primary UI.
+
+## Run Locally
+
+1. Install Python deps:
    `pip install -r requirements.txt`
-2. Run the pipeline:
-   `python run_pipeline.py`
-3. Run the UI:
-   `python -m streamlit run src/ui/app.py`
-4. Run the API:
-   `uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000`
+2. Start API:
+   `python run_api.py`
+3. Start frontend:
+   `cd frontend && npm install && npm run dev -- --host 0.0.0.0 --port 3000`
+4. Open:
+   `http://localhost:3000`
 
-## Notes
+## Docker (Recommended)
 
-- Main configuration lives in `config/config.yaml`.
-- Detailed technical documentation is in `DETAILS.md`.
+Run full stack:
+
+`docker compose up --build`
+
+Services:
+
+- Frontend: `http://localhost:3000`
+- API: `http://localhost:8000`
+- MLflow: `http://localhost:5000`
+
+## Core Product Logic
+
+- User enters `chrom`, `pos`, `ref`, `alt`
+- App tries feature-store lookup
+- If found: prediction runs directly
+- If not found: manual specs become required (`SIFT`, `PolyPhen`, `CADD`, `ALT_FREQ`)
+- Probabilities and confidence are returned and shown in UI
+
+## Detailed Documentation
+
+See `DETAILS.md` for architecture, API contracts, and operational notes.

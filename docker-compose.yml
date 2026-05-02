@@ -1,42 +1,44 @@
-version: '3.8'
-
 services:
-  # 1. Le serveur MLflow
   mlflow:
-    image: python:3.11-slim
+    build:
+      context: .
+      dockerfile: Dockerfile.mlflow
     container_name: genopredict-mlflow
     ports:
       - "5000:5000"
     volumes:
-      - ./mlruns:/app/mlruns
-      - ./models:/app/models
-      - ./mlflow.db:/app/mlflow.db
-      - ./mlruns:/home/badr/genomic-variant-mlops/mlruns
-    working_dir: /app
-    command: >
-      bash -c "pip install mlflow && 
-      mlflow db upgrade sqlite:///mlflow.db && 
-      mlflow server --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlruns --host 0.0.0.0 --port 5000 --allowed-hosts '*'"
+      - ./mlruns:/mlflow/mlruns
+      - ./mlflow.db:/mlflow/mlflow.db
     networks:
       - mlops_network
 
-  # 2. L'application Streamlit
-  streamlit:
-    build: .
-    container_name: genopredict-streamlit
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: genopredict-api
     ports:
-      - "8501:8501"
-    volumes:
-      - .:/app
-      - ./mlruns:/app/mlruns
-      - ./mlruns:/home/badr/genomic-variant-mlops/mlruns
+      - "8000:8000"
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+      - S3_BUCKET=${S3_BUCKET}
     depends_on:
       - mlflow
+    networks:
+      - mlops_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: genopredict-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
     networks:
       - mlops_network
 

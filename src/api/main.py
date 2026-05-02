@@ -1,11 +1,15 @@
 import sys
+import os
 import logging
+import importlib.util
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 import mlflow
+import mlflow.xgboost
 import pandas as pd
 import numpy as np
 
@@ -16,12 +20,12 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.orchestration.config_utils import ConfigManager
-from src.ui.scripts.bridge import fetch_features_from_s3
 from src.features.schema_contract import FEATURE_ORDER, enforce_feature_contract
 
 # Configuration du logger pour le terminal
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+HAS_MULTIPART = importlib.util.find_spec("multipart") is not None
 
 cm = ConfigManager(project_root=PROJECT_ROOT)
 cfg = cm.config
@@ -69,14 +73,53 @@ class S3FeaturesResponse(BaseModel):
     data: List[Dict[str, Any]] = []
     message: Optional[str] = None
 
+class VCFUploadResponse(BaseModel):
+    """Response model for VCF preview upload."""
+    found: bool
+    records: List[Dict[str, Any]] = []
+    total_records: int = 0
+    message: Optional[str] = None
+
+class VCFVariantInput(BaseModel):
+    chrom: str
+    pos: str
+    ref: str
+    alt: str
+
+class VCFBatchPredictRequest(BaseModel):
+    records: List[VCFVariantInput]
+    max_records: int = 200
+
+class VCFBatchPredictItem(BaseModel):
+    chrom: str
+    pos: str
+    ref: str
+    alt: str
+    found_in_store: bool
+    status: str
+    prediction: Optional[int] = None
+    label: Optional[str] = None
+    probability: Optional[float] = None
+    confidence_score: Optional[float] = None
+    message: Optional[str] = None
+
+class VCFBatchPredictResponse(BaseModel):
+    status: str
+    total_input: int
+    processed: int
+    predicted: int
+    not_found: int
+    failed: int
+    results: List[VCFBatchPredictItem]
+
 class HealthResponse(BaseModel):
     """Response model for health check"""
     api_status: str
     model_status: str
     model_uri: Optional[str] = None
 
-# 1. Forcer MLflow à lire dans la base SQLite
-tracking_uri = cfg.mlflow.tracking_uri
+# 1. Tracking URI (env override for container deployments)
+tracking_uri = os.getenv("MLFLOW_TRACKING_URI", cfg.mlflow.tracking_uri)
 logger.info(f"📡 Connexion au Model Registry via : {tracking_uri}")
 mlflow.set_tracking_uri(tracking_uri)
 
@@ -88,12 +131,97 @@ try:
     
     logger.info(f"⏳ Chargement du modèle depuis : {model_uri}")
     model = mlflow.pyfunc.load_model(model_uri)
+    model_xgb = None
+    try:
+        model_xgb = mlflow.xgboost.load_model(model_uri)
+    except Exception as xgb_load_error:
+        logger.warning(f"⚠️ Could not load xgboost flavor model for probabilities: {xgb_load_error}")
     MODEL_STATUS = "loaded"
     logger.info("✅ Modèle 'Production' chargé avec succès en mémoire.")
 except Exception as e:
     logger.error(f"❌ Erreur critique lors du chargement du modèle : {e}")
     model = None
+    model_xgb = None
     MODEL_STATUS = "not_loaded"
+
+
+def _predict_with_probability(df: pd.DataFrame) -> tuple[int, Optional[float], float]:
+    raw_pred = model.predict(df)
+    prediction = int(np.ravel(raw_pred)[0])
+
+    probability: Optional[float] = None
+    confidence = 0.5
+
+    # First try through pyfunc wrapper.
+    try:
+        if hasattr(model, "predict_proba"):
+            proba = model.predict_proba(df)
+            probability = float(proba[0][1]) if np.ndim(proba) > 1 else float(proba[0])
+    except Exception as e:
+        logger.warning(f"Could not get probability from pyfunc model: {e}")
+
+    # Fallback to native xgboost flavor.
+    if probability is None and model_xgb is not None:
+        try:
+            if hasattr(model_xgb, "predict_proba"):
+                proba = model_xgb.predict_proba(df)
+                probability = float(proba[0][1]) if np.ndim(proba) > 1 else float(proba[0])
+            elif hasattr(model_xgb, "predict"):
+                xgb_raw = np.ravel(model_xgb.predict(df))
+                if xgb_raw.size:
+                    candidate = float(xgb_raw[0])
+                    if 0.0 <= candidate <= 1.0:
+                        probability = candidate
+        except Exception as e:
+            logger.warning(f"Could not get probability from xgboost flavor: {e}")
+
+    if probability is not None:
+        probability = max(0.0, min(1.0, probability))
+        confidence = max(probability, 1.0 - probability)
+
+    return prediction, probability, confidence
+
+
+def _variant_to_predict_payload(row: Dict[str, Any], chrom: str, pos: str, ref: str, alt: str) -> Dict[str, Any]:
+    def _num(*keys: str) -> Optional[float]:
+        for key in keys:
+            value = row.get(key)
+            if value is None or value == "":
+                continue
+            try:
+                return float(value)
+            except Exception:
+                continue
+        return None
+
+    payload = {
+        "chrom": str(chrom),
+        "pos": str(pos),
+        "ref": str(ref).upper(),
+        "alt": str(alt).upper(),
+    }
+
+    sift = _num("SIFT_score", "SIFT")
+    polyphen = _num("Polyphen2_HVAR_score", "PolyPhen")
+    cadd = _num("CADD_phred", "CADD")
+    alt_freq = _num("gnomAD_exomes_AF", "ALT_FREQ")
+
+    if sift is not None:
+        payload["sift"] = sift
+    if polyphen is not None:
+        payload["polyphen"] = polyphen
+    if cadd is not None:
+        payload["cadd"] = cadd
+    if alt_freq is not None:
+        payload["alt_freq"] = alt_freq
+
+    return payload
+
+
+def _fetch_features_with_timeout(fetch_fn, chrom: str, pos: str, ref: str, alt: str, timeout_seconds: int = 20):
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(fetch_fn, chrom, pos, ref, alt)
+        return future.result(timeout=timeout_seconds)
 
 @app.get("/", response_model=HealthResponse)
 def health():
@@ -128,12 +256,13 @@ def predict(data: dict):
         
         df = enforce_feature_contract(df, fill_missing=True)
         
-        # 2. Prédiction
-        pred = model.predict(df)
+        prediction, probability, confidence = _predict_with_probability(df)
         
         return {
             "status": "success",
-            "prediction": int(pred[0])
+            "prediction": prediction,
+            "probability": probability,
+            "confidence_score": confidence
         }
     except Exception as e:
         logger.error(f"⚠️ Erreur de prédiction avec les données : {data}. Détail: {e}")
@@ -163,20 +292,7 @@ def predict_enhanced(variant: VariantInput):
         
         df = enforce_feature_contract(df, fill_missing=True)
         
-        # Make prediction
-        pred = model.predict(df)
-        prediction = int(pred[0])
-        
-        # Try to get prediction probability if available
-        probability = None
-        confidence_score = None
-        try:
-            if hasattr(model, 'predict_proba'):
-                probas = model.predict_proba(df)
-                probability = float(probas[0][1])  # Probability of pathogenic class
-                confidence_score = max(probas[0])  # Max probability
-        except Exception as e:
-            logger.warning(f"Could not get probability: {e}")
+        prediction, probability, confidence_score = _predict_with_probability(df)
         
         logger.info(f"Prediction for {variant.chrom}:{variant.pos} {variant.ref}/{variant.alt} = {prediction}")
         
@@ -184,7 +300,7 @@ def predict_enhanced(variant: VariantInput):
             status="success",
             prediction=prediction,
             probability=probability,
-            confidence_score=confidence_score or 0.5,
+            confidence_score=confidence_score,
             cadd_score=variant.cadd,
             mutation_type=None
         )
@@ -196,7 +312,7 @@ def predict_enhanced(variant: VariantInput):
         )
 
 @app.get("/api/fetch-features", response_model=S3FeaturesResponse)
-def fetch_features(chrom: str, pos: str):
+def fetch_features(chrom: str, pos: str, ref: Optional[str] = None, alt: Optional[str] = None):
     """
     Fetch variant features from S3 feature store using bridge script.
     
@@ -209,22 +325,43 @@ def fetch_features(chrom: str, pos: str):
     - data: List of feature dictionaries
     """
     try:
-        logger.info(f"Fetching features for chr{chrom}:{pos}")
-        
-        # Call bridge function to fetch from S3
-        df = fetch_features_from_s3(chrom, pos)
+        ref_q = (ref or "").strip().upper()
+        alt_q = (alt or "").strip().upper()
+        if not ref_q or not alt_q:
+            raise HTTPException(
+                status_code=422,
+                detail="Both ref and alt query params are required for precise feature lookup."
+            )
+
+        logger.info(f"Fetching features for chr{chrom}:{pos} {ref_q}>{alt_q}")
+
+        try:
+            from src.ui.scripts.bridge import fetch_features_from_s3
+        except Exception as import_error:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Feature store dependency missing: {import_error}"
+            )
+
+        try:
+            df = _fetch_features_with_timeout(fetch_features_from_s3, chrom, pos, ref_q, alt_q, timeout_seconds=20)
+        except FuturesTimeoutError:
+            raise HTTPException(
+                status_code=504,
+                detail="Feature store lookup timed out. Please retry."
+            )
         
         if df is None or df.empty:
             logger.warning(f"Variant not found: chr{chrom}:{pos}")
             return S3FeaturesResponse(
                 found=False,
                 data=[],
-                message=f"Variant chr{chrom}:{pos} not found in S3 feature store"
+                message=f"Variant chr{chrom}:{pos} {ref_q}>{alt_q} not found in S3 feature store"
             )
         
         # Convert DataFrame to list of dicts
         features_list = df.to_dict('records')
-        logger.info(f"Found {len(features_list)} records for chr{chrom}:{pos}")
+        logger.info(f"Found {len(features_list)} records for chr{chrom}:{pos} {ref_q}>{alt_q}")
         
         return S3FeaturesResponse(
             found=True,
@@ -232,12 +369,206 @@ def fetch_features(chrom: str, pos: str):
             message=f"Successfully fetched {len(features_list)} record(s)"
         )
     
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error fetching features from S3: {str(e)}")
         raise HTTPException(
             status_code=400,
             detail=f"Error fetching features: {str(e)}"
         )
+
+def _parse_vcf_content(content: bytes, limit: int) -> VCFUploadResponse:
+    text = content.decode("utf-8", errors="replace")
+    rows: List[Dict[str, Any]] = []
+    for line in text.splitlines():
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) < 5:
+            continue
+
+        chrom, pos, _id, ref, alt = parts[:5]
+        # ALT can be comma-separated; keep one row per ALT for usability.
+        for alt_allele in alt.split(","):
+            alt_allele = alt_allele.strip().upper()
+            if not alt_allele:
+                continue
+            rows.append(
+                {
+                    "chrom": chrom.replace("chr", "").upper(),
+                    "pos": pos,
+                    "ref": ref.upper(),
+                    "alt": alt_allele,
+                }
+            )
+            if len(rows) >= limit:
+                break
+        if len(rows) >= limit:
+            break
+
+    if not rows:
+        return VCFUploadResponse(
+            found=False,
+            records=[],
+            total_records=0,
+            message="No valid VCF records found."
+        )
+
+    return VCFUploadResponse(
+        found=True,
+        records=rows,
+        total_records=len(rows),
+        message=f"Parsed {len(rows)} variant records from VCF."
+    )
+
+
+if HAS_MULTIPART:
+    @app.post("/api/upload-vcf", response_model=VCFUploadResponse)
+    async def upload_vcf(file: UploadFile = File(...), limit: int = 200):
+        """
+        Upload and parse a VCF file to preview variants for downstream scoring.
+        Returns a lightweight list with CHROM, POS, REF, ALT.
+        """
+        filename = (file.filename or "").lower()
+        if not (filename.endswith(".vcf") or filename.endswith(".vcf.gz")):
+            raise HTTPException(status_code=400, detail="Please upload a .vcf or .vcf.gz file.")
+
+        if limit <= 0 or limit > 5000:
+            raise HTTPException(status_code=400, detail="limit must be between 1 and 5000.")
+
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+        try:
+            return _parse_vcf_content(content, limit)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"VCF parsing error: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Failed to parse VCF: {str(e)}")
+else:
+    @app.post("/api/upload-vcf", response_model=VCFUploadResponse)
+    async def upload_vcf_unavailable():
+        raise HTTPException(
+            status_code=503,
+            detail="VCF upload requires python-multipart. Install with: pip install python-multipart",
+        )
+
+
+@app.post("/api/vcf-batch-predict", response_model=VCFBatchPredictResponse)
+def vcf_batch_predict(request: VCFBatchPredictRequest):
+    """
+    Batch predict variants parsed from VCF.
+    Workflow:
+    1) For each record, query feature store using chrom/pos/ref/alt.
+    2) Predict only when found in store (no manual fallback in batch mode).
+    3) Return per-record statuses and aggregate counters.
+    """
+    if model is None:
+        raise HTTPException(status_code=503, detail="Model could not be loaded.")
+
+    max_records = max(1, min(5000, int(request.max_records)))
+    input_records = request.records[:max_records]
+    if not input_records:
+        raise HTTPException(status_code=400, detail="No records provided.")
+
+    try:
+        from src.ui.scripts.bridge import fetch_features_from_s3
+    except Exception as import_error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Feature store dependency missing: {import_error}"
+        )
+
+    results: List[VCFBatchPredictItem] = []
+    predicted = 0
+    not_found = 0
+    failed = 0
+
+    for record in input_records:
+        chrom = str(record.chrom).replace("chr", "").upper()
+        pos = str(record.pos)
+        ref = str(record.ref).upper()
+        alt = str(record.alt).upper()
+
+        try:
+            try:
+                df_store = _fetch_features_with_timeout(fetch_features_from_s3, chrom, pos, ref, alt, timeout_seconds=20)
+            except FuturesTimeoutError:
+                failed += 1
+                results.append(
+                    VCFBatchPredictItem(
+                        chrom=chrom,
+                        pos=pos,
+                        ref=ref,
+                        alt=alt,
+                        found_in_store=False,
+                        status="failed",
+                        message="Feature store lookup timed out.",
+                    )
+                )
+                continue
+            if df_store is None or df_store.empty:
+                not_found += 1
+                results.append(
+                    VCFBatchPredictItem(
+                        chrom=chrom,
+                        pos=pos,
+                        ref=ref,
+                        alt=alt,
+                        found_in_store=False,
+                        status="not_found",
+                        message="Variant not found in feature store.",
+                    )
+                )
+                continue
+
+            row = df_store.iloc[0].to_dict()
+            payload = _variant_to_predict_payload(row, chrom, pos, ref, alt)
+            df_pred = enforce_feature_contract(pd.DataFrame([payload]), fill_missing=True)
+            prediction, probability, confidence = _predict_with_probability(df_pred)
+            predicted += 1
+
+            results.append(
+                VCFBatchPredictItem(
+                    chrom=chrom,
+                    pos=pos,
+                    ref=ref,
+                    alt=alt,
+                    found_in_store=True,
+                    status="predicted",
+                    prediction=prediction,
+                    label="PATHOGENIC" if prediction == 1 else "BENIGN",
+                    probability=probability,
+                    confidence_score=confidence,
+                )
+            )
+        except Exception as e:
+            failed += 1
+            logger.error(f"Batch prediction failed for {chrom}:{pos} {ref}>{alt}: {e}")
+            results.append(
+                VCFBatchPredictItem(
+                    chrom=chrom,
+                    pos=pos,
+                    ref=ref,
+                    alt=alt,
+                    found_in_store=False,
+                    status="failed",
+                    message=str(e),
+                )
+            )
+
+    return VCFBatchPredictResponse(
+        status="success",
+        total_input=len(request.records),
+        processed=len(input_records),
+        predicted=predicted,
+        not_found=not_found,
+        failed=failed,
+        results=results,
+    )
 
 @app.get("/api/model-info")
 def model_info():

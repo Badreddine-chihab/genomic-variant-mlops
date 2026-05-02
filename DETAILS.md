@@ -1,184 +1,161 @@
-# Genomic Variant MLOps: Detailed Documentation
+# Genomic Variant MLOps - Detailed Guide
 
-## 1. Project Goal
+## 1. Product Overview
 
-This project builds and serves a genomic variant classifier for pathogenicity prediction. It combines:
+This system predicts genomic variant pathogenicity with a production-oriented MLOps architecture.
 
-- data ingestion and preprocessing,
-- feature engineering,
-- model training and evaluation,
-- model governance and promotion,
-- inference serving through API and UI.
+Primary user flow:
 
-The repository is designed as an MLOps workflow rather than a notebook-only experiment.
+1. Input `chrom`, `pos`, `ref`, `alt`
+2. Query feature store for matching variant
+3. If found: predict immediately
+4. If not found: require manual feature inputs (`SIFT`, `PolyPhen`, `CADD`, `ALT_FREQ`)
+5. Return class + probability + confidence
 
-## 2. High-Level Architecture
+## 2. Architecture
 
-### Core Components
+### 2.1 Backend
 
-- Orchestration:
-  `run_pipeline.py` coordinates pipeline tasks in sequence.
-- Data + features:
-  `src/data`, `src/features`.
-- Modeling:
-  `src/model` for training, evaluation, interpretation, and governance.
-- Serving:
-  `src/api/main.py` (FastAPI) and `src/ui/app.py` (Streamlit).
-- Experiment tracking:
-  MLflow (tracking + registry).
-- Configuration:
-  `config/` (OmegaConf/YAML based).
+- Framework: FastAPI
+- Main module: `src/api/main.py`
+- Model loading: MLflow model registry alias `GenomicVariantModel@Production`
+- Feature schema enforcement: `src/features/schema_contract.py`
 
-### Runtime Modes
+### 2.2 Frontend
 
-- Local development:
-  local Python environment with local MLflow SQLite backend.
-- Containerized mode:
-  Docker and docker-compose workflow for MLflow + app stack.
+- Framework: React + Vite
+- UI library: Bootstrap
+- Main app: `frontend/src/App.jsx`
+- API client: `frontend/src/api.js`
 
-## 3. Repository Structure
+### 2.3 Model and MLOps
 
-- `run_pipeline.py`:
-  pipeline entrypoint.
-- `src/data/`:
-  data stitching utilities.
-- `src/features/`:
-  feature generation and optimization helpers.
-- `src/model/`:
-  training, evaluation, SHAP interpretation, model promotion logic.
-- `src/api/`:
-  inference API and health endpoints.
-- `src/ui/`:
-  Streamlit application + S3 bridge scripts.
-- `src/orchestration/`:
-  configuration and infra utilities.
-- `config/`:
-  training, validation, paths, AWS, and global config.
-- `tests/`:
-  focused tests for bridge and UI validation logic.
+- Training: `src/model/train_model.py`
+- Evaluation: `src/model/eval.py`
+- Interpretation: `src/model/interpret.py`
+- Promotion/governance: `src/model/manager.py`
+- Tracking/registry: MLflow
 
-## 4. Configuration
+## 3. API Endpoints
 
-Main config:
-`config/config.yaml`
+- `GET /api/health`:
+  service and model status
+- `GET /api/model-info`:
+  model metadata and input feature schema
+- `GET /api/fetch-features?chrom=&pos=&ref=&alt=`:
+  variant lookup in feature store
+- `POST /api/predict`:
+  single variant prediction
+- `POST /api/upload-vcf`:
+  parse and preview VCF records
+- `POST /api/vcf-batch-predict`:
+  batch prediction for parsed VCF records
 
-Important blocks:
+## 4. Probability and Confidence
 
-- `mlflow`:
-  tracking URI and experiment name.
-- `features`:
-  categorical columns and target column.
-- `pipeline`:
-  runtime behavior (debug/logging mode).
-- `paths`:
-  local project paths for data and artifacts.
-- `aws`:
-  cloud settings used by bridge/data access paths.
+Prediction output includes:
 
-## 5. Pipeline Flow
+- `prediction`:
+  class (0 benign, 1 pathogenic)
+- `probability`:
+  estimated pathogenic probability (0-1)
+- `confidence_score`:
+  max(probability, 1 - probability)
 
-`run_pipeline.py` orchestrates the workflow:
+## 5. Feature Contract
 
-1. Data pull (DVC/S3 sync when needed)
-2. Chromosome stitching
-3. Feature encoding
-4. XGBoost training
-5. Cross-validation evaluation
-6. SHAP-based interpretation
-7. Governance and MLflow promotion
+A shared contract is used across training and inference:
 
-Each stage is executed as a task, with predictable ordering and explicit failure propagation.
+- canonical order
+- required names
+- defaults
+- categorical handling
 
-## 6. Modeling and MLflow
+Source: `src/features/schema_contract.py`
 
-### Training
+This prevents schema drift and `not in index` runtime failures.
 
-- `src/model/train_model.py` logs metrics and model artifacts to MLflow.
-- Core metrics include PR-AUC, ROC-AUC, precision, recall, F1, accuracy.
-- Model is logged under artifact path `model`.
+## 6. VCF Workflow
 
-### Evaluation
+### 6.1 Parse
 
-- `src/model/eval.py` runs CV-based validation and logs fold/global metrics.
+`/api/upload-vcf` reads VCF rows, skips headers, and extracts:
 
-### Governance/Promotion
+- `chrom`
+- `pos`
+- `ref`
+- `alt`
 
-- `src/model/manager.py` selects the latest successful training run.
-- Promotion is gated by threshold (`pr_auc` governance rule).
-- Model alias `Production` is assigned on successful promotion.
+Multi-ALT rows are split into one record per ALT allele.
 
-### MLflow Compatibility Note
+### 6.2 Batch Predict
 
-The governance code resolves MLflow 3 logged-model URIs (`models:/m-...`) before fallback to `runs:/.../model`, preventing missing `MLmodel` path issues when run artifacts are unavailable.
+`/api/vcf-batch-predict`:
 
-## 7. Inference Interfaces
+1. For each variant, attempts feature-store lookup
+2. Predicts only when lookup succeeds
+3. Returns per-record status:
+   - `predicted`
+   - `not_found`
+   - `failed`
+4. Returns aggregate counters:
+   `processed`, `predicted`, `not_found`, `failed`
 
-## FastAPI (`src/api/main.py`)
+## 7. Reliability Hardening Implemented
 
-- `/` and `/api/health`:
-  service and model health.
-- `/predict`:
-  legacy inference endpoint.
-- `/api/predict`:
-  structured endpoint for frontend clients.
-- `/api/fetch-features`:
-  fetches variant records from feature store path.
+- Lazy import for feature-store dependency in API endpoint path
+- VCF route fallback message when multipart dependency is missing
+- Feature-store lookup timeout in API to avoid hanging batch calls
+- Docker build cleanup with `.dockerignore`
 
-### Streamlit (`src/ui/app.py`)
+## 8. Containerization
 
-- Variant search by chromosome/position/ref/alt.
-- S3-backed feature retrieval with manual fallback.
-- Inference + prediction display.
-- Defensive preprocessing now auto-creates/normalizes expected model features to avoid `not in index` crashes.
+### 8.1 API Container
 
-## 8. Feature Engineering (Inference-Safe)
+- File: `Dockerfile`
+- Exposes port `8000`
+- Runs `uvicorn src.api.main:app`
 
-The inference preprocessing includes:
+### 8.2 Frontend Container
 
-- base genomic transformations (`REF_Base`, `ALT_Base`, `mutation_type`),
-- indel/frame-shift features,
-- rarity and damage score features,
-- interaction terms and positional bins,
-- transition/transversion flags,
-- default handling for missing columns.
+- File: `frontend/Dockerfile`
+- Multi-stage build (Node build + Nginx serve)
+- Exposes port `3000`
 
-This keeps single-variant requests compatible with training-time model expectations.
+### 8.3 MLflow Container
 
-## 9. Running the Project
+- File: `Dockerfile.mlflow`
+- Exposes port `5000`
 
-### Local
+### 8.4 Compose
 
-1. `pip install -r requirements.txt`
-2. `python run_pipeline.py`
-3. `python -m streamlit run src/ui/app.py`
-4. `uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000`
+`docker-compose.yml` now runs:
 
-### Optional Docker Flow
+- `mlflow`
+- `api`
+- `frontend`
 
-- Build and run service containers as defined in the project Docker files and compose settings.
+Streamlit is removed from compose orchestration.
 
-## 10. Testing
+## 9. Local Development
 
-Current tests cover focused components:
+### API
 
-- MLflow bridge behavior.
-- UI input validation behavior.
+`python run_api.py`
 
-Recommended extension:
+### Frontend
 
-- end-to-end API inference tests,
-- feature schema contract tests between training and serving,
-- governance threshold and alias integration tests.
+`cd frontend && npm install && npm run dev -- --host 0.0.0.0 --port 3000`
 
-## 11. Operational Notes
+## 10. Operations Notes
 
-- Keep `MLFLOW_TRACKING_URI` consistent across training, governance, API, and UI.
-- If model alias updates but UI still loads old state, restart Streamlit to clear cached resource loading.
-- Ensure AWS credentials are configured when using S3-backed feature retrieval.
+- API tracking URI can be overridden by env var:
+  `MLFLOW_TRACKING_URI`
+- Batch prediction requires feature-store connectivity and AWS credentials
+- VCF upload requires `python-multipart`
 
-## 12. Known Risks / Future Improvements
+## 11. Known Constraints
 
-- Add stricter schema versioning for model input contracts.
-- Add automated dependency checks between logged model environment and runtime environment.
-- Add CI checks for model artifact availability and alias integrity.
-- Expand observability around inference errors and drift.
+- VCF batch mode predicts only variants found in the feature store
+- Variants not found return `not_found` and require alternate handling
+- Clinical decision support must remain human-supervised

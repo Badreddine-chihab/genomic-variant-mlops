@@ -23,6 +23,7 @@ pydantic>=2.7.0
 streamlit>=1.35.0      # AJOUTÉ : Pour ton interface
 fastapi>=0.111.0
 uvicorn>=0.30.0
+python-multipart>=0.0.9
 
 # --- Infrastructure ---
 boto3>=1.35.0

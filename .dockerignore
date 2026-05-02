@@ -1,19 +1,14 @@
-# Les monstres de stockage
-.dvc/
-.git/
-.venv/
-venv/
-frontend/
-
-# Les données et bases locales
-data/
-mlruns/
-models/
-notebooks/
-home/
-*.db
-*.duckdb
-
-# Les fichiers de cache
+.git
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.swp
+.env
+venv/
+.venv/
+notebooks/
+frontend/node_modules/
+frontend/dist/
+mlruns/
+*.zip

@@ -1,0 +1,51 @@
+:root {
+  --bs-primary: #0d6efd;
+  --bs-body-font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+
+body {
+  background: radial-gradient(circle at top right, #eef4ff, #f7f8fa 40%, #ffffff);
+}
+
+.card {
+  border-radius: 0.85rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+}
+
+.navbar-brand {
+  letter-spacing: 0;
+  font-weight: 650;
+}
+
+.table > :not(caption) > * > * {
+  white-space: nowrap;
+}
+
+.nav-pills .nav-link {
+  border-radius: 0.7rem;
+  color: #3b4252;
+  font-weight: 600;
+}
+
+.nav-pills .nav-link.active {
+  box-shadow: 0 8px 20px rgba(13, 110, 253, 0.2);
+}
+
+.page-panel {
+  animation: pageFade 260ms ease;
+}
+
+@keyframes pageFade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
