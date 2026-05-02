@@ -96,6 +96,56 @@ function exportHistoryCSV(history) {
   URL.revokeObjectURL(url);
 }
 
+function exportBatchReportCSV(summary, rows) {
+  if (!rows.length) return;
+
+  const headers = [
+    "chrom",
+    "pos",
+    "ref",
+    "alt",
+    "status",
+    "prediction",
+    "label",
+    "probability_percent",
+    "confidence_percent",
+    "message",
+    "processed",
+    "predicted",
+    "not_found",
+    "failed"
+  ];
+
+  const lines = [headers.join(",")];
+  for (const row of rows) {
+    const values = [
+      row.chrom,
+      row.pos,
+      row.ref,
+      row.alt,
+      row.status,
+      row.prediction ?? "",
+      row.label ?? "",
+      row.probability !== null && row.probability !== undefined ? (row.probability * 100).toFixed(3) : "",
+      row.confidence_score !== null && row.confidence_score !== undefined ? (row.confidence_score * 100).toFixed(3) : "",
+      row.message ?? "",
+      summary?.processed ?? "",
+      summary?.predicted ?? "",
+      summary?.notFound ?? "",
+      summary?.failed ?? ""
+    ];
+    lines.push(values.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","));
+  }
+
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "genopredict_vcf_batch_report.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function PageOverview({ health, modelInfo, history, dashboard }) {
   return (
     <div className="page-panel">
@@ -425,6 +475,7 @@ function PageVcf({ onSelectVariant, onBatchResults }) {
         <div className="card-body">
           <p className="text-secondary mb-3">
             Upload a clinical `.vcf` file, preview parsed variants, then send one directly to Predict page.
+            Sample file: <code>data/examples/example_variants.vcf</code>.
           </p>
           <div className="row g-2">
             <div className="col-md-8">
@@ -436,6 +487,7 @@ function PageVcf({ onSelectVariant, onBatchResults }) {
               />
             </div>
             <div className="col-md-2">
+              <label className="form-label mb-1 small text-muted">Max records</label>
               <input
                 className="form-control"
                 type="number"
@@ -446,11 +498,15 @@ function PageVcf({ onSelectVariant, onBatchResults }) {
               />
             </div>
             <div className="col-md-2">
+              <label className="form-label mb-1 small text-muted">Parse file</label>
               <button className="btn btn-primary w-100" onClick={handleUpload} disabled={loading}>
                 {loading ? "Parsing..." : "Parse VCF"}
               </button>
             </div>
             <div className="col-md-12">
+              <p className="small text-secondary mb-2">
+                The number above sets how many VCF variants are parsed and sent to batch prediction.
+              </p>
               <button className="btn btn-success w-100" onClick={handleBatchPredict} disabled={batchLoading || !records.length}>
                 {batchLoading ? "Running Batch Prediction..." : "Run Batch Prediction"}
               </button>
@@ -509,10 +565,19 @@ function PageVcf({ onSelectVariant, onBatchResults }) {
       </div>
 
       {batchResults.length > 0 && (
-        <div className="card shadow-sm border-0 mt-3">
-          <div className="card-header bg-white border-0 py-3">
+      <div className="card shadow-sm border-0 mt-3">
+        <div className="card-header bg-white border-0 py-3">
+          <div className="d-flex justify-content-between align-items-center">
             <h5 className="mb-0">Batch Prediction Results</h5>
+            <button
+              className="btn btn-sm btn-outline-primary"
+              onClick={() => exportBatchReportCSV(batchSummary, batchResults)}
+              disabled={!batchResults.length}
+            >
+              Download Report
+            </button>
           </div>
+        </div>
           <div className="table-responsive">
             <table className="table table-striped table-hover mb-0 align-middle">
               <thead className="table-light">

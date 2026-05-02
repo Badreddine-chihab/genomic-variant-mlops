@@ -39,6 +39,17 @@ Services:
 - API: `http://localhost:8000`
 - MLflow: `http://localhost:5000`
 
+## Verification
+
+Lightweight smoke checks are included for the core demo paths:
+
+- API health + single prediction
+- VCF upload + batch prediction
+
+Run them with:
+
+`python -c "from tests.test_api_smoke import test_health_and_predict_smoke, test_vcf_upload_and_batch_predict_smoke; test_health_and_predict_smoke(); test_vcf_upload_and_batch_predict_smoke()"`
+
 ## Core Product Logic
 
 - User enters `chrom`, `pos`, `ref`, `alt`
@@ -46,6 +57,7 @@ Services:
 - If found: prediction runs directly
 - If not found: manual specs become required (`SIFT`, `PolyPhen`, `CADD`, `ALT_FREQ`)
 - Probabilities and confidence are returned and shown in UI
+- VCF batch results can be exported from the VCF Lab page as a CSV report
 
 ## Detailed Documentation
 

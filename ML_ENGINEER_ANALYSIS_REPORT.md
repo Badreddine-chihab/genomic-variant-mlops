@@ -21,6 +21,8 @@ The project is now aligned with a production-oriented inference architecture:
 4. VCF ingestion endpoint and batch prediction endpoint
 5. Frontend multi-page workflow (Overview, Predict, VCF Lab)
 6. Docker stack migrated from Streamlit-serving to React + API serving
+7. Smoke tests for API health, single prediction, and VCF batch flow
+8. Downloadable CSV report for VCF batch runs in the frontend
 
 ## Model Serving Notes
 
@@ -56,6 +58,6 @@ Compose orchestration is now centered on the React app and API.
 ## Recommended Next Steps
 
 1. Add authenticated access and audit logging for clinical environments
-2. Add E2E integration tests for VCF upload to prediction report flow
+2. Add full browser E2E coverage for VCF upload to prediction report flow
 3. Add model threshold calibration monitoring and periodic recalibration jobs
-4. Add structured prediction report export (CSV + summary PDF)
+4. Add optional PDF report generation if you want a more formal clinical handout

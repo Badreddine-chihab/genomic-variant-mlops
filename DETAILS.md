@@ -107,27 +107,43 @@ Multi-ALT rows are split into one record per ALT allele.
 - VCF route fallback message when multipart dependency is missing
 - Feature-store lookup timeout in API to avoid hanging batch calls
 - Docker build cleanup with `.dockerignore`
+- Smoke tests for API health, single prediction, VCF upload, and VCF batch flow
 
-## 8. Containerization
+## 8. VCF Batch Reporting
 
-### 8.1 API Container
+The React VCF Lab page includes a downloadable CSV report for batch runs.
+
+The export contains:
+
+- variant coordinates
+- prediction status
+- class label
+- probability percentage
+- confidence percentage
+- batch summary counters
+
+This is designed for professor-facing demos and quick review of batch results.
+
+## 9. Containerization
+
+### 9.1 API Container
 
 - File: `Dockerfile`
 - Exposes port `8000`
 - Runs `uvicorn src.api.main:app`
 
-### 8.2 Frontend Container
+### 9.2 Frontend Container
 
 - File: `frontend/Dockerfile`
 - Multi-stage build (Node build + Nginx serve)
 - Exposes port `3000`
 
-### 8.3 MLflow Container
+### 9.3 MLflow Container
 
 - File: `Dockerfile.mlflow`
 - Exposes port `5000`
 
-### 8.4 Compose
+### 9.4 Compose
 
 `docker-compose.yml` now runs:
 
@@ -137,7 +153,7 @@ Multi-ALT rows are split into one record per ALT allele.
 
 Streamlit is removed from compose orchestration.
 
-## 9. Local Development
+## 10. Local Development
 
 ### API
 
@@ -147,14 +163,14 @@ Streamlit is removed from compose orchestration.
 
 `cd frontend && npm install && npm run dev -- --host 0.0.0.0 --port 3000`
 
-## 10. Operations Notes
+## 11. Operations Notes
 
 - API tracking URI can be overridden by env var:
   `MLFLOW_TRACKING_URI`
 - Batch prediction requires feature-store connectivity and AWS credentials
 - VCF upload requires `python-multipart`
 
-## 11. Known Constraints
+## 12. Known Constraints
 
 - VCF batch mode predicts only variants found in the feature store
 - Variants not found return `not_found` and require alternate handling
