@@ -5,14 +5,12 @@ import pandas as pd
 import logging
 from pathlib import Path
 
-# --- BLOC DE RÉSOLUTION DE CHEMIN (DOIT ÊTRE EN HAUT) ---
-current_file = Path(__file__).resolve()
-PROJECT_ROOT = current_file.parent.parent.parent
-
+# --- PATH RESOLUTION ---
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-# -------------------------------------------------------
 
+# Imports AFTER path fix
 import xgboost as xgb
 from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split
@@ -26,52 +24,52 @@ from sklearn.metrics import (
 )
 import mlflow
 import mlflow.xgboost
-from src.orchestration.config_utils import ConfigManager
+from src.orchestration.config_utils import ConfigManager, setup_mlflow
 
-# Configuration du logger standard
+# Logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+
 def find_best_threshold(y_true, y_probs, n_points=50):
-    """Trouve le meilleur seuil sur le jeu de VALIDATION pour optimiser le F1-Score."""
     thresholds = np.linspace(0.05, 0.95, n_points)
     best_f1 = 0
     best_thresh = 0.5
+
     for t in thresholds:
         y_pred = (y_probs >= t).astype(int)
         f1 = f1_score(y_true, y_pred)
+
         if f1 > best_f1:
             best_f1 = f1
             best_thresh = t
+
     return best_thresh, best_f1
 
+
 def train_model():
-    # 1. INITIALISATION CONFIG & MLFLOW
-    cm = ConfigManager(project_root=PROJECT_ROOT)
+    # 1. INIT CONFIG (ALIGN WITH OTHER SCRIPTS)
+    cm = ConfigManager()
     cfg = cm.config
-    
-    # ---------------------------------------------------------
-    # 🔧 FIX MLFLOW : Forcer l'utilisation de la base de données
-    # ---------------------------------------------------------
+    setup_mlflow(cfg)
+
     tracking_uri = cfg.mlflow.tracking_uri
     experiment_name = cfg.mlflow.experiment_name
-    
-    logger.info(f"📡 Connexion à MLflow via : {tracking_uri}")
+
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(experiment_name)
-    # ---------------------------------------------------------
-    
-    # Raccourcis vers les blocs de config
+
     xgb_cfg = cfg.training.xgboost
     train_cfg = cfg.training.training
-    
+
     data_path = cm.get_path("paths.data.final_training")
-    logger.info(f"🚀 Démarrage de l'entraînement sur GPU")
-    logger.info(f"📂 Chargement des données : {data_path}")
-    
+
+    logger.info("🚀 Starting training (GPU)")
+    logger.info(f"📂 Data: {data_path}")
+
     df = pd.read_parquet(data_path)
-    
-    # 2. PRÉPARATION DES DONNÉES
+
+    # 2. PREP DATA
     cat_cols = cfg.features.categorical_cols
     for col in cat_cols:
         if col in df.columns:
@@ -81,22 +79,23 @@ def train_model():
     X = df.drop(columns=[target])
     y = df[target]
 
-    # Split : Train (70%), Val (15%), Test (15%)
+    # SPLITS
     X_train, X_temp, y_train, y_temp = train_test_split(
         X, y, test_size=0.3, stratify=y, random_state=42
     )
+
     X_val, X_test, y_val, y_test = train_test_split(
         X_temp, y_temp, test_size=0.5, stratify=y_temp, random_state=42
     )
 
-    # 3. CALCUL DYNAMIQUE DU POIDS
+    # 3. CLASS IMBALANCE
     if xgb_cfg.get("scale_pos_weight_auto", True):
         scale_pos_weight = (len(y_train) - y_train.sum()) / y_train.sum()
-        logger.info(f"⚖️ Scale_pos_weight calculé : {scale_pos_weight:.2f}")
+        logger.info(f"⚖️ scale_pos_weight: {scale_pos_weight:.2f}")
     else:
         scale_pos_weight = 1.0
 
-    # 4. CONFIGURATION DU MODÈLE
+    # 4. MODEL
     model = XGBClassifier(
         n_estimators=xgb_cfg.n_estimators,
         max_depth=xgb_cfg.max_depth,
@@ -115,21 +114,26 @@ def train_model():
         reg_lambda=xgb_cfg.get("reg_lambda", 1)
     )
 
-    # 5. TRAINING VIA MLFLOW
+    # 5. TRAINING
     with mlflow.start_run(run_name="XGB_Genomic_GPU"):
-        logger.info("⚙️ Entraînement en cours...")
+        mlflow.set_tag("stage", "training")
+        logger.info("⚙️ Training...")
+
         model.fit(
-            X_train, y_train,
+            X_train,
+            y_train,
             eval_set=[(X_val, y_val)],
             verbose=100 if train_cfg.verbose else False
         )
 
-        # 6. ÉVALUATION ET OPTIMISATION DU SEUIL
+        # 6. THRESHOLD OPTIMIZATION
         val_probs = model.predict_proba(X_val)[:, 1]
         best_thresh, val_f1 = find_best_threshold(
-            y_val, val_probs, n_points=train_cfg.get("threshold_n_points", 50)
+            y_val,
+            val_probs,
+            n_points=train_cfg.get("threshold_n_points", 50)
         )
-        
+
         test_probs = model.predict_proba(X_test)[:, 1]
         y_pred = (test_probs >= best_thresh).astype(int)
 
@@ -143,27 +147,44 @@ def train_model():
             "best_threshold": best_thresh
         }
 
-        mlflow.log_params(xgb_cfg)
+        mlflow.log_params(dict(xgb_cfg))
         mlflow.log_metrics(metrics)
-        mlflow.xgboost.log_model(model, "model")
 
-        logger.info("\n🔥 RÉSULTATS FINAUX (Sur Test Set) :")
+        # ✅ CRITICAL FIX: correct URI format
+        mlflow.xgboost.log_model(model, artifact_path="model")
+
+        # ✅ OPTIONAL: register here OR in manager (better separation)
+        # 👉 Recommended: REMOVE THIS BLOCK if using manager.py
+        """
+        try:
+            model_uri = f"runs:/{mlflow.active_run().info.run_id}/model"
+            mv = mlflow.register_model(model_uri, "GenomicVariantModel")
+            logger.info(f"Registered model version {mv.version}")
+        except Exception as e:
+            logger.warning(f"Registration failed: {e}")
+        """
+
+        # RESULTS
+        logger.info("\n🔥 FINAL RESULTS:")
         for k, v in metrics.items():
             logger.info(f"{k.upper():<15}: {v:.4f}")
 
-        # 7. SAUVEGARDE LOCALE
+        # 7. LOCAL SAVE
         if train_cfg.save_model_locally:
-            output_dir = PROJECT_ROOT / train_cfg.model_output_dir
+            output_dir = Path(cm.project_root) / train_cfg.model_output_dir
             output_dir.mkdir(parents=True, exist_ok=True)
+
             model_path = output_dir / "xgboost_gpu_model.json"
             model.save_model(str(model_path))
-            logger.info(f"💾 Modèle sauvegardé localement : {model_path}")
 
-    logger.info("✅ Pipeline d'entraînement terminé avec succès.")
+            logger.info(f"💾 Saved locally: {model_path}")
+
+    logger.info("✅ Training pipeline completed")
+
 
 if __name__ == "__main__":
     try:
         train_model()
     except Exception as e:
-        logger.error(f"❌ Erreur critique lors de l'entraînement : {e}")
+        logger.error(f"❌ Critical error: {e}")
         sys.exit(1)

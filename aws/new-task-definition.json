@@ -1,0 +1,106 @@
+{
+  "family": "genopredict-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "containerDefinitions": [
+    {
+      "name": "mlflow",
+      "image": "docker.io/ba809dr/genopredict-mlflow:latest",
+      "portMappings": [
+        {
+          "containerPort": 5000,
+          "hostPort": 5000,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "PYTHONUNBUFFERED",
+          "value": "1"
+        }
+      ],
+      "command": [
+        "mlflow",
+        "server",
+        "--backend-store-uri",
+        "sqlite:////mlflow/mlflow.db",
+        "--default-artifact-root",
+        "/mlflow/mlruns",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "5000",
+        "--workers",
+        "2"
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/genopredict-task",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "mlflow"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:5000/ || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      }
+    },
+    {
+      "name": "streamlit",
+      "image": "docker.io/ba809dr/genomic-variant-mlops:latest",
+      "portMappings": [
+        {
+          "containerPort": 8501,
+          "hostPort": 8501,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "MLFLOW_TRACKING_URI",
+          "value": "http://localhost:5000"
+        },
+        {
+          "name": "PYTHONUNBUFFERED",
+          "value": "1"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/genopredict-task",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "streamlit"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8501/_stcore/health || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "dependsOn": [
+        {
+          "containerName": "mlflow",
+          "condition": "HEALTHY"
+        }
+      ]
+    }
+  ],
+  "executionRoleArn": "arn:aws:iam::366486935668:role/ecsTaskExecutionRole"
+}

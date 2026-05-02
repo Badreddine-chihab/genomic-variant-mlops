@@ -1,0 +1,26 @@
+FROM python:3.11-slim
+
+WORKDIR /mlflow
+
+# Install system dependencies including curl for health checks
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    sqlite3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install MLflow with specific version
+RUN pip install --no-cache-dir mlflow==2.14.1
+
+# Create directory for artifacts
+RUN mkdir -p /mlflow/mlruns
+
+EXPOSE 5000
+
+# Launch MLflow with resource limits
+CMD ["mlflow", "server", \
+     "--backend-store-uri", "sqlite:////mlflow/mlflow.db", \
+     "--default-artifact-root", "/mlflow/mlruns", \
+     "--host", "0.0.0.0", \
+     "--port", "5000", \
+     "--workers", "2", \
+     "--allowed-hosts", "*"]

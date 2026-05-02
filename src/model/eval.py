@@ -71,6 +71,7 @@ def evaluate_model_cv():
     }
 
     with mlflow.start_run(run_name=f"XGB_CV_{n_splits}Fold"):
+        mlflow.set_tag("stage", "evaluation")
         cv = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
         
         # cross_validate est plus complet que cross_val_score

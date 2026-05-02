@@ -7,7 +7,4 @@ Includes:
 - Configuration management
 - Logging utilities
 """
-
-from . import aws_utils  # noqa: F401
-
-__all__ = ["aws_utils"]
+__all__ = []

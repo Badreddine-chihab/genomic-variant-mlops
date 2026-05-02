@@ -51,6 +51,7 @@ def interpret_model():
     shap_values = explainer.shap_values(X.sample(1000, random_state=42))
 
     with mlflow.start_run(run_name="Model_Interpretation"):
+        mlflow.set_tag("stage", "interpretation")
         # --- Graphique 1 : Summary Plot (Importance globale) ---
         plt.figure(figsize=(10, 6))
         shap.summary_plot(shap_values, X.sample(1000, random_state=42), show=False)
