@@ -1,4 +1,6 @@
 import os
+import sys
+from pathlib import Path
 import streamlit as st
 import pandas as pd
 import polars as pl
@@ -6,7 +8,13 @@ import numpy as np
 import mlflow
 import mlflow.pyfunc
 
-from scripts.bridge import fetch_features_from_s3
+# Ensure project root is importable when Streamlit runs this file directly.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.ui.scripts.bridge import fetch_features_from_s3
+from src.features.schema_contract import enforce_feature_contract
 
 # ==========================================
 # 🎨 CONFIG + STYLE
@@ -46,6 +54,37 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+NUMERIC_DEFAULTS = {
+    "Is_InDel": 0,
+    "Delta_Length": 0,
+    "indel_size": 0,
+    "Is_Frameshift": 0,
+    "freq_log": 0.0,
+    "rare_variant": 0,
+    "is_ultra_rare": 0,
+    "is_large_indel": 0,
+    "CADD_high": 0,
+    "CADD_very_high": 0,
+    "SIFT_damaging": 0,
+    "PolyPhen_damaging": 0,
+    "CADD_x_rare": 0.0,
+    "Impact_Score": 0.0,
+    "rare_impact": 0.0,
+    "normalized_pos": 0.0,
+    "pos_bin": 0,
+    "pos_freq_interaction": 0.0,
+    "is_transition": 0,
+    "is_transversion": 0,
+    "chrom_freq_mean": 0.0,
+    "chrom_rare_rate": 0.0,
+}
+
+CATEGORICAL_DEFAULTS = {
+    "REF_Base": "N",
+    "ALT_Base": "N",
+    "mutation_type": "N_N",
+}
+
 # ==========================================
 # 🧬 CONSTANTS
 # ==========================================
@@ -56,16 +95,6 @@ CHR_LENGTHS = {
     "16":90338345,"17":83257441,"18":80373285,"19":58617616,"20":64444167,
     "21":46709983,"22":50818468,"X":156040895,"Y":57227415,"M":16569
 }
-
-ORDERED_FEATURES = [
-    'CHROM','SIFT','PolyPhen','CADD','ALT_FREQ','Is_InDel','Delta_Length',
-    'indel_size','Is_Frameshift','REF_Base','ALT_Base','mutation_type',
-    'freq_log','rare_variant','is_ultra_rare','is_large_indel','CADD_high',
-    'CADD_very_high','SIFT_damaging','PolyPhen_damaging','CADD_x_rare',
-    'Impact_Score','rare_impact','normalized_pos','pos_bin',
-    'pos_freq_interaction','is_transition','is_transversion',
-    'chrom_freq_mean','chrom_rare_rate'
-]
 
 DEFAULT_FEATURE_VALUES = {
     "SIFT": -1.0,
@@ -208,20 +237,7 @@ def preprocess_features(df_raw):
     df["chrom_freq_mean"] = df["ALT_FREQ"].astype(float)
     df["chrom_rare_rate"] = df["rare_variant"].astype(float)
 
-    for col, default in NUMERIC_DEFAULTS.items():
-        if col not in df.columns:
-            df[col] = default
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(default)
-
-    for col, default in CATEGORICAL_DEFAULTS.items():
-        if col not in df.columns:
-            df[col] = default
-        df[col] = df[col].astype(str).fillna(default)
-
-    for col in ["CHROM","REF_Base","ALT_Base","mutation_type"]:
-        df[col] = df[col].astype("category")
-
-    return df[ORDERED_FEATURES]
+    return enforce_feature_contract(df, fill_missing=True)
 
 # ==========================================
 # 🧬 HEADER

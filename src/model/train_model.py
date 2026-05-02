@@ -25,6 +25,7 @@ from sklearn.metrics import (
 import mlflow
 import mlflow.xgboost
 from src.orchestration.config_utils import ConfigManager, setup_mlflow
+from src.features.schema_contract import CATEGORICAL_FEATURES, FEATURE_ORDER, enforce_feature_contract
 
 # Logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -76,7 +77,7 @@ def train_model():
             df[col] = df[col].astype('category')
 
     target = cfg.features.target_col
-    X = df.drop(columns=[target])
+    X = enforce_feature_contract(df.drop(columns=[target]), fill_missing=False)
     y = df[target]
 
     # SPLITS
@@ -148,6 +149,9 @@ def train_model():
         }
 
         mlflow.log_params(dict(xgb_cfg))
+        mlflow.log_param("feature_schema_version", "v1")
+        mlflow.log_param("feature_count", len(FEATURE_ORDER))
+        mlflow.log_param("categorical_feature_count", len(CATEGORICAL_FEATURES))
         mlflow.log_metrics(metrics)
 
         # ✅ CRITICAL FIX: correct URI format

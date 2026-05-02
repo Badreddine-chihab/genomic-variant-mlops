@@ -11,6 +11,7 @@ from sklearn.metrics import make_scorer, average_precision_score, roc_auc_score
 
 # Import du gestionnaire de configuration centralisé
 from src.orchestration.config_utils import ConfigManager, setup_mlflow
+from src.features.schema_contract import enforce_feature_contract
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ def evaluate_model_cv():
             df[col] = df[col].astype('category')
 
     target = cfg.features.target_col
-    X = df.drop(columns=[target])
+    X = enforce_feature_contract(df.drop(columns=[target]), fill_missing=False)
     y = df[target]
 
     # 3. CONFIGURATION DU MODÈLE GPU

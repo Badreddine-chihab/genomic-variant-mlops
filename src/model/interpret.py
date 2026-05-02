@@ -8,6 +8,7 @@ from pathlib import Path
 from src.orchestration.config_utils import ConfigManager, setup_mlflow
 import xgboost as xgb
 import sys 
+from src.features.schema_contract import enforce_feature_contract
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -38,7 +39,7 @@ def interpret_model():
     
     # On charge un échantillon pour l'explication (SHAP est gourmand en calcul)
     df = pd.read_parquet(data_path)
-    X = df.drop(columns=[cfg.features.target_col])
+    X = enforce_feature_contract(df.drop(columns=[cfg.features.target_col]), fill_missing=False)
     
     # Transformation des catégories pour SHAP (il préfère les codes numériques)
     for col in cfg.features.categorical_cols:

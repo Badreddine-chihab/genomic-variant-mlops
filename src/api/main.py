@@ -17,6 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.orchestration.config_utils import ConfigManager
 from src.ui.scripts.bridge import fetch_features_from_s3
+from src.features.schema_contract import FEATURE_ORDER, enforce_feature_contract
 
 # Configuration du logger pour le terminal
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -125,15 +126,7 @@ def predict(data: dict):
         # 1. Conversion en DataFrame
         df = pd.DataFrame([data])
         
-        # ---------------------------------------------------------
-        # 🔧 FIX : Conversion des types 'object' en 'category'
-        # On utilise la même liste que lors de l'entraînement
-        # ---------------------------------------------------------
-        cat_cols = cfg.features.categorical_cols
-        for col in cat_cols:
-            if col in df.columns:
-                df[col] = df[col].astype('category')
-        # ---------------------------------------------------------
+        df = enforce_feature_contract(df, fill_missing=True)
         
         # 2. Prédiction
         pred = model.predict(df)
@@ -168,11 +161,7 @@ def predict_enhanced(variant: VariantInput):
         # Convert to DataFrame
         df = pd.DataFrame([data])
         
-        # Convert categorical columns
-        cat_cols = cfg.features.categorical_cols
-        for col in cat_cols:
-            if col in df.columns:
-                df[col] = df[col].astype('category')
+        df = enforce_feature_contract(df, fill_missing=True)
         
         # Make prediction
         pred = model.predict(df)
@@ -262,6 +251,6 @@ def model_info():
         "model_uri": model_uri if MODEL_STATUS == "loaded" else None,
         "version": "1.0",
         "description": "XGBoost classifier for genomic variant pathogenicity prediction",
-        "input_features": cfg.features.ordered_features if hasattr(cfg.features, 'ordered_features') else [],
+        "input_features": FEATURE_ORDER,
         "classes": ["Benign", "Pathogenic"],
     }
