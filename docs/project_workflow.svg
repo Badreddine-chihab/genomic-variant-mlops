@@ -1,0 +1,384 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="2350" viewBox="0 0 1800 2350" role="img" aria-labelledby="title desc">
+  <title id="title">GenoPredict Genomic Variant MLOps Project Workflow</title>
+  <desc id="desc">End-to-end workflow diagram for the genomic variant MLOps project, including data versioning, processing, training, governance, serving, frontend, monitoring, deployment, and CI/CD technologies.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f7f8fb; }
+      .title { font: 800 44px Arial, Helvetica, sans-serif; fill: #17202a; }
+      .subtitle { font: 400 20px Arial, Helvetica, sans-serif; fill: #52616f; }
+      .section-title { font: 800 23px Arial, Helvetica, sans-serif; fill: #111827; }
+      .section-note { font: 400 15px Arial, Helvetica, sans-serif; fill: #5b6673; }
+      .lane { fill: #ffffff; stroke: #d8dee8; stroke-width: 2; }
+      .box { stroke-width: 2; rx: 8; ry: 8; }
+      .box-title { font: 800 18px Arial, Helvetica, sans-serif; fill: #111827; }
+      .box-text { font: 400 14px Arial, Helvetica, sans-serif; fill: #344054; }
+      .small { font: 400 13px Arial, Helvetica, sans-serif; fill: #4b5563; }
+      .tiny { font: 700 12px Arial, Helvetica, sans-serif; fill: #ffffff; letter-spacing: .3px; }
+      .pill { font: 700 13px Arial, Helvetica, sans-serif; fill: #ffffff; }
+      .arrow { stroke: #3b4658; stroke-width: 2.6; fill: none; marker-end: url(#arrow); }
+      .arrow-soft { stroke: #7a8798; stroke-width: 2.2; fill: none; marker-end: url(#arrow-soft); stroke-dasharray: 8 7; }
+      .legend-title { font: 800 18px Arial, Helvetica, sans-serif; fill: #111827; }
+      .legend-text { font: 400 14px Arial, Helvetica, sans-serif; fill: #344054; }
+      .mono { font: 700 13px Consolas, Menlo, monospace; fill: #223047; }
+    </style>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#3b4658"/>
+    </marker>
+    <marker id="arrow-soft" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#7a8798"/>
+    </marker>
+    <linearGradient id="headerGrad" x1="0" x2="1">
+      <stop offset="0" stop-color="#e8f4ff"/>
+      <stop offset="1" stop-color="#eef8f1"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#101828" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <rect class="bg" width="1800" height="2350"/>
+  <rect x="52" y="40" width="1696" height="160" rx="18" fill="url(#headerGrad)" stroke="#d5e4ef" stroke-width="2"/>
+  <text x="90" y="100" class="title">GenoPredict: Genomic Variant MLOps Workflow</text>
+  <text x="90" y="135" class="subtitle">End-to-end schema: data versioning, feature engineering, XGBoost training, MLflow governance, FastAPI serving, React UI, monitoring, and Docker deployment.</text>
+  <text x="90" y="168" class="mono">Main commands: python run_pipeline.py  |  python run_api.py  |  docker compose up --build</text>
+
+  <!-- Top legend -->
+  <g filter="url(#shadow)">
+    <rect x="1190" y="78" width="505" height="88" rx="10" fill="#ffffff" stroke="#d8dee8" stroke-width="2"/>
+    <text x="1215" y="112" class="legend-title">Primary Runtime Surfaces</text>
+    <text x="1215" y="140" class="legend-text">Frontend 3000 | API 8000 | MLflow 5000 | Prometheus 9090 | Grafana 3001</text>
+  </g>
+
+  <!-- Lanes -->
+  <rect class="lane" x="70" y="245" width="1660" height="300" rx="16"/>
+  <rect class="lane" x="70" y="585" width="1660" height="420" rx="16"/>
+  <rect class="lane" x="70" y="1045" width="1660" height="395" rx="16"/>
+  <rect class="lane" x="70" y="1480" width="1660" height="330" rx="16"/>
+  <rect class="lane" x="70" y="1850" width="1660" height="330" rx="16"/>
+
+  <!-- Lane headings -->
+  <text x="105" y="292" class="section-title">1. Data Sources and Versioning</text>
+  <text x="105" y="318" class="section-note">Raw genomic files are managed locally and through DVC/S3 so training can be reproduced.</text>
+
+  <text x="105" y="632" class="section-title">2. Offline Training Pipeline</text>
+  <text x="105" y="658" class="section-note">The root launcher orchestrates sequential Prefect tasks, while each step lives in src/ modules.</text>
+
+  <text x="105" y="1092" class="section-title">3. Model Registry and Online Inference</text>
+  <text x="105" y="1118" class="section-note">The API loads the Production model from MLflow, enforces the same feature contract, and serves predictions to the UI.</text>
+
+  <text x="105" y="1527" class="section-title">4. Monitoring, Drift, and Product Feedback Loop</text>
+  <text x="105" y="1553" class="section-note">Operational metrics and prediction events feed dashboards and drift reports after real API usage.</text>
+
+  <text x="105" y="1897" class="section-title">5. Deployment and CI/CD</text>
+  <text x="105" y="1923" class="section-note">Docker Compose runs the full stack, while GitHub Actions verifies tests, frontend build, and compose images.</text>
+
+  <!-- Reusable boxes: Data lane -->
+  <g filter="url(#shadow)">
+    <rect class="box" x="120" y="355" width="250" height="118" fill="#fff7ed" stroke="#f2b06b"/>
+    <rect x="120" y="355" width="250" height="30" rx="8" fill="#c45f0a"/>
+    <text x="138" y="376" class="tiny">RAW GENOMIC DATA</text>
+    <text x="142" y="415" class="box-title">dbNSFP extracts</text>
+    <text x="142" y="443" class="box-text">Chromosome .gz files</text>
+    <text x="142" y="466" class="box-text">data/raw and DVC pointers</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="455" y="355" width="260" height="118" fill="#eef9ff" stroke="#6fb7dd"/>
+    <rect x="455" y="355" width="260" height="30" rx="8" fill="#087ea4"/>
+    <text x="473" y="376" class="tiny">VERSIONED STORAGE</text>
+    <text x="477" y="415" class="box-title">DVC + AWS S3</text>
+    <text x="477" y="443" class="box-text">dvc pull when data is missing</text>
+    <text x="477" y="466" class="box-text">s3://.../dvc-storage</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="800" y="355" width="280" height="118" fill="#f0fdf4" stroke="#6cc98a"/>
+    <rect x="800" y="355" width="280" height="30" rx="8" fill="#15803d"/>
+    <text x="818" y="376" class="tiny">LOCAL FEATURE STORE</text>
+    <text x="822" y="415" class="box-title">Processed Parquet</text>
+    <text x="822" y="443" class="box-text">model_ready_dataset.parquet</text>
+    <text x="822" y="466" class="box-text">used by training and API lookup</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="1165" y="355" width="300" height="118" fill="#f4f3ff" stroke="#a59ee8"/>
+    <rect x="1165" y="355" width="300" height="30" rx="8" fill="#6750a4"/>
+    <text x="1183" y="376" class="tiny">FEATURE LOOKUP FALLBACK</text>
+    <text x="1187" y="415" class="box-title">DuckDB + S3 bridge</text>
+    <text x="1187" y="443" class="box-text">src/ui/scripts/bridge.py</text>
+    <text x="1187" y="466" class="box-text">AWS credentials when remote data is needed</text>
+  </g>
+
+  <!-- Data arrows -->
+  <path class="arrow" d="M370 414 H455"/>
+  <path class="arrow" d="M715 414 H800"/>
+  <path class="arrow-soft" d="M1080 414 H1165"/>
+
+  <!-- Training lane boxes -->
+  <g filter="url(#shadow)">
+    <rect class="box" x="120" y="700" width="250" height="132" fill="#eff6ff" stroke="#6aa7ef"/>
+    <rect x="120" y="700" width="250" height="30" rx="8" fill="#1d4ed8"/>
+    <text x="138" y="721" class="tiny">ORCHESTRATION</text>
+    <text x="142" y="760" class="box-title">run_pipeline.py</text>
+    <text x="142" y="788" class="box-text">Prefect flow/tasks</text>
+    <text x="142" y="811" class="box-text">ConfigManager + YAML configs</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="455" y="700" width="250" height="132" fill="#fff7ed" stroke="#f2b06b"/>
+    <rect x="455" y="700" width="250" height="30" rx="8" fill="#c45f0a"/>
+    <text x="473" y="721" class="tiny">DATA PROCESSING</text>
+    <text x="477" y="760" class="box-title">Stitching_chr.py</text>
+    <text x="477" y="788" class="box-text">Polars + PyArrow</text>
+    <text x="477" y="811" class="box-text">raw chromosomes to model-ready parquet</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="790" y="700" width="250" height="132" fill="#ecfdf5" stroke="#63bf90"/>
+    <rect x="790" y="700" width="250" height="30" rx="8" fill="#047857"/>
+    <text x="808" y="721" class="tiny">FEATURE ENGINEERING</text>
+    <text x="812" y="760" class="box-title">encode_features.py</text>
+    <text x="812" y="788" class="box-text">Pandas, NumPy, schema contract</text>
+    <text x="812" y="811" class="box-text">final_training_dataset.parquet</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="1125" y="700" width="250" height="132" fill="#fff1f2" stroke="#f28b9a"/>
+    <rect x="1125" y="700" width="250" height="30" rx="8" fill="#be123c"/>
+    <text x="1143" y="721" class="tiny">MODEL TRAINING</text>
+    <text x="1147" y="760" class="box-title">XGBoost classifier</text>
+    <text x="1147" y="788" class="box-text">train_model.py</text>
+    <text x="1147" y="811" class="box-text">PR-AUC optimized binary classifier</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="1460" y="700" width="230" height="132" fill="#f5f3ff" stroke="#a59ee8"/>
+    <rect x="1460" y="700" width="230" height="30" rx="8" fill="#6d28d9"/>
+    <text x="1478" y="721" class="tiny">TRACKING</text>
+    <text x="1482" y="760" class="box-title">MLflow run</text>
+    <text x="1482" y="788" class="box-text">metrics, params, artifacts</text>
+    <text x="1482" y="811" class="box-text">mlflow.db + mlruns</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="455" y="870" width="250" height="96" fill="#f8fafc" stroke="#cbd5e1"/>
+    <rect x="455" y="870" width="250" height="30" rx="8" fill="#475569"/>
+    <text x="473" y="891" class="tiny">VALIDATION</text>
+    <text x="477" y="930" class="box-title">5-fold evaluation</text>
+    <text x="477" y="954" class="box-text">src/model/eval.py</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="790" y="870" width="250" height="96" fill="#fffbeb" stroke="#e8be4f"/>
+    <rect x="790" y="870" width="250" height="30" rx="8" fill="#b45309"/>
+    <text x="808" y="891" class="tiny">INTERPRETATION</text>
+    <text x="812" y="930" class="box-title">SHAP reports</text>
+    <text x="812" y="954" class="box-text">src/model/interpret.py</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="1125" y="870" width="250" height="96" fill="#eef2ff" stroke="#8da2fb"/>
+    <rect x="1125" y="870" width="250" height="30" rx="8" fill="#4338ca"/>
+    <text x="1143" y="891" class="tiny">GOVERNANCE</text>
+    <text x="1147" y="930" class="box-title">manager + register</text>
+    <text x="1147" y="954" class="box-text">promote best pr_auc >= 0.80</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="1460" y="870" width="230" height="96" fill="#f5f3ff" stroke="#a59ee8"/>
+    <rect x="1460" y="870" width="230" height="30" rx="8" fill="#6d28d9"/>
+    <text x="1478" y="891" class="tiny">REGISTRY OUTPUT</text>
+    <text x="1482" y="930" class="box-title">Production alias</text>
+    <text x="1482" y="954" class="box-text">GenomicVariantModel@Production</text>
+  </g>
+
+  <!-- Training arrows -->
+  <path class="arrow" d="M370 766 H455"/>
+  <path class="arrow" d="M705 766 H790"/>
+  <path class="arrow" d="M1040 766 H1125"/>
+  <path class="arrow" d="M1375 766 H1460"/>
+  <path class="arrow" d="M1250 832 V870"/>
+  <path class="arrow" d="M705 918 H790"/>
+  <path class="arrow" d="M1040 918 H1125"/>
+  <path class="arrow" d="M1375 918 H1460"/>
+  <path class="arrow-soft" d="M245 700 V520 H930 V700"/>
+
+  <!-- Serving lane boxes -->
+  <g filter="url(#shadow)">
+    <rect class="box" x="120" y="1160" width="285" height="146" fill="#f5f3ff" stroke="#a59ee8"/>
+    <rect x="120" y="1160" width="285" height="30" rx="8" fill="#6d28d9"/>
+    <text x="138" y="1181" class="tiny">MODEL SOURCE</text>
+    <text x="142" y="1220" class="box-title">MLflow Model Registry</text>
+    <text x="142" y="1248" class="box-text">models:/GenomicVariantModel@Production</text>
+    <text x="142" y="1271" class="box-text">fallback: xgboost_gpu_model.json</text>
+    <text x="142" y="1294" class="box-text">mlflow.pyfunc + xgboost flavor</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="500" y="1160" width="320" height="146" fill="#eff6ff" stroke="#6aa7ef"/>
+    <rect x="500" y="1160" width="320" height="30" rx="8" fill="#1d4ed8"/>
+    <text x="518" y="1181" class="tiny">BACKEND API</text>
+    <text x="522" y="1220" class="box-title">FastAPI + Uvicorn</text>
+    <text x="522" y="1248" class="box-text">src/api/main.py</text>
+    <text x="522" y="1271" class="box-text">run_api.py local launcher</text>
+    <text x="522" y="1294" class="box-text">feature contract at inference</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="915" y="1160" width="335" height="146" fill="#ecfdf5" stroke="#63bf90"/>
+    <rect x="915" y="1160" width="335" height="30" rx="8" fill="#047857"/>
+    <text x="933" y="1181" class="tiny">FEATURE RESOLUTION</text>
+    <text x="937" y="1220" class="box-title">Local parquet, then S3</text>
+    <text x="937" y="1248" class="box-text">data/processed/model_ready_dataset.parquet</text>
+    <text x="937" y="1271" class="box-text">DuckDB S3 bridge if local miss</text>
+    <text x="937" y="1294" class="box-text">manual SIFT, PolyPhen, CADD, ALT_FREQ if needed</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="1350" y="1160" width="330" height="146" fill="#fff7ed" stroke="#f2b06b"/>
+    <rect x="1350" y="1160" width="330" height="30" rx="8" fill="#c45f0a"/>
+    <text x="1368" y="1181" class="tiny">PRODUCT UI</text>
+    <text x="1372" y="1220" class="box-title">React + Vite + Bootstrap</text>
+    <text x="1372" y="1248" class="box-text">frontend/src/App.jsx + api.js</text>
+    <text x="1372" y="1271" class="box-text">Nginx or Vite proxy for /api and /metrics</text>
+    <text x="1372" y="1294" class="box-text">single prediction and VCF Lab pages</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="500" y="1340" width="320" height="74" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="522" y="1375" class="box-title">API endpoints</text>
+    <text x="522" y="1400" class="box-text">/api/health, /api/model-info, /api/predict, /api/fetch-features</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="915" y="1340" width="335" height="74" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="937" y="1375" class="box-title">VCF workflow</text>
+    <text x="937" y="1400" class="box-text">/api/upload-vcf parses rows, /api/vcf-batch-predict returns statuses</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="1350" y="1340" width="330" height="74" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="1372" y="1375" class="box-title">Prediction output</text>
+    <text x="1372" y="1400" class="box-text">benign/pathogenic, probability, confidence, CSV export</text>
+  </g>
+
+  <!-- Serving arrows -->
+  <path class="arrow" d="M405 1233 H500"/>
+  <path class="arrow" d="M820 1233 H915"/>
+  <path class="arrow" d="M1250 1233 H1350"/>
+  <path class="arrow" d="M1515 1160 V1015 H1575 V966"/>
+  <path class="arrow" d="M660 1306 V1340"/>
+  <path class="arrow" d="M1083 1306 V1340"/>
+  <path class="arrow" d="M1515 1306 V1340"/>
+
+  <!-- Monitoring lane boxes -->
+  <g filter="url(#shadow)">
+    <rect class="box" x="120" y="1600" width="300" height="122" fill="#eff6ff" stroke="#6aa7ef"/>
+    <rect x="120" y="1600" width="300" height="30" rx="8" fill="#1d4ed8"/>
+    <text x="138" y="1621" class="tiny">API INSTRUMENTATION</text>
+    <text x="142" y="1660" class="box-title">Prometheus metrics</text>
+    <text x="142" y="1688" class="box-text">src/monitoring/prometheus_metrics.py</text>
+    <text x="142" y="1711" class="box-text">served at /metrics</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="500" y="1600" width="300" height="122" fill="#fef2f2" stroke="#f09999"/>
+    <rect x="500" y="1600" width="300" height="30" rx="8" fill="#b91c1c"/>
+    <text x="518" y="1621" class="tiny">EVENT LOGGING</text>
+    <text x="522" y="1660" class="box-title">Prediction events</text>
+    <text x="522" y="1688" class="box-text">data/monitoring/predictions.jsonl</text>
+    <text x="522" y="1711" class="box-text">summary and history API endpoints</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="880" y="1600" width="300" height="122" fill="#fff7ed" stroke="#f2b06b"/>
+    <rect x="880" y="1600" width="300" height="30" rx="8" fill="#c45f0a"/>
+    <text x="898" y="1621" class="tiny">DASHBOARDS</text>
+    <text x="902" y="1660" class="box-title">Prometheus + Grafana</text>
+    <text x="902" y="1688" class="box-text">scrape genopredict-api every 15s</text>
+    <text x="902" y="1711" class="box-text">provisioned dashboards in monitoring/</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="1260" y="1600" width="330" height="122" fill="#ecfdf5" stroke="#63bf90"/>
+    <rect x="1260" y="1600" width="330" height="30" rx="8" fill="#047857"/>
+    <text x="1278" y="1621" class="tiny">DRIFT REPORTING</text>
+    <text x="1282" y="1660" class="box-title">Evidently-compatible report</text>
+    <text x="1282" y="1688" class="box-text">python -m src.monitoring.evidently_report</text>
+    <text x="1282" y="1711" class="box-text">reports/monitoring/latest_drift_report.html</text>
+  </g>
+
+  <!-- Monitoring arrows -->
+  <path class="arrow-soft" d="M660 1440 V1600"/>
+  <path class="arrow-soft" d="M1083 1440 V1560 H650 V1600"/>
+  <path class="arrow" d="M420 1661 H500"/>
+  <path class="arrow" d="M800 1661 H880"/>
+  <path class="arrow" d="M1180 1661 H1260"/>
+
+  <!-- Deployment lane boxes -->
+  <g filter="url(#shadow)">
+    <rect class="box" x="120" y="1970" width="320" height="130" fill="#f8fafc" stroke="#cbd5e1"/>
+    <rect x="120" y="1970" width="320" height="30" rx="8" fill="#334155"/>
+    <text x="138" y="1991" class="tiny">COMPOSE STACK</text>
+    <text x="142" y="2030" class="box-title">docker-compose.yml</text>
+    <text x="142" y="2058" class="box-text">mlflow, api, frontend, prometheus, grafana</text>
+    <text x="142" y="2081" class="box-text">shared mlruns, mlflow.db, data/processed mounts</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="520" y="1970" width="270" height="130" fill="#f5f3ff" stroke="#a59ee8"/>
+    <rect x="520" y="1970" width="270" height="30" rx="8" fill="#6d28d9"/>
+    <text x="538" y="1991" class="tiny">MLFLOW SERVICE</text>
+    <text x="542" y="2030" class="box-title">Dockerfile.mlflow</text>
+    <text x="542" y="2058" class="box-text">serves registry and artifacts</text>
+    <text x="542" y="2081" class="box-text">health waits for ready marker</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="870" y="1970" width="270" height="130" fill="#eff6ff" stroke="#6aa7ef"/>
+    <rect x="870" y="1970" width="270" height="30" rx="8" fill="#1d4ed8"/>
+    <text x="888" y="1991" class="tiny">API SERVICE</text>
+    <text x="892" y="2030" class="box-title">Dockerfile</text>
+    <text x="892" y="2058" class="box-text">uvicorn src.api.main:app</text>
+    <text x="892" y="2081" class="box-text">depends on healthy MLflow</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="1220" y="1970" width="280" height="130" fill="#fff7ed" stroke="#f2b06b"/>
+    <rect x="1220" y="1970" width="280" height="30" rx="8" fill="#c45f0a"/>
+    <text x="1238" y="1991" class="tiny">FRONTEND SERVICE</text>
+    <text x="1242" y="2030" class="box-title">Node build + Nginx</text>
+    <text x="1242" y="2058" class="box-text">Vite React production build</text>
+    <text x="1242" y="2081" class="box-text">same-origin proxy to API</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="520" y="2130" width="420" height="86" fill="#ecfdf5" stroke="#63bf90"/>
+    <text x="542" y="2165" class="box-title">GitHub Actions CI/CD</text>
+    <text x="542" y="2190" class="box-text">Python 3.11 tests, npm ci, frontend build, docker compose config, compose build</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect class="box" x="1010" y="2130" width="490" height="86" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="1032" y="2165" class="box-title">Verification</text>
+    <text x="1032" y="2190" class="box-text">pytest smoke tests cover health, single prediction, VCF upload, batch prediction, feature lookup</text>
+  </g>
+
+  <!-- Deployment arrows -->
+  <path class="arrow" d="M440 2035 H520"/>
+  <path class="arrow" d="M790 2035 H870"/>
+  <path class="arrow" d="M1140 2035 H1220"/>
+  <path class="arrow-soft" d="M1005 1970 V1440"/>
+  <path class="arrow" d="M790 2100 V2130"/>
+  <path class="arrow" d="M1140 2100 V2130"/>
+
+  <!-- Cross-lane registry arrow -->
+  <path class="arrow" d="M1460 945 C1240 1015, 650 1040, 260 1160"/>
+
+  <!-- Tech stack panel -->
+  <g filter="url(#shadow)">
+    <rect x="70" y="2225" width="1660" height="80" rx="14" fill="#111827"/>
+    <text x="105" y="2260" class="pill">Technology Stack</text>
+    <text x="105" y="2288" class="pill">Python | Prefect | DVC | AWS S3 | Polars | PyArrow | Pandas | NumPy | DuckDB | XGBoost | scikit-learn | SHAP | MLflow | FastAPI | Uvicorn | Pydantic | React | Vite | Bootstrap | Nginx | Docker Compose | Prometheus | Grafana | Evidently | pytest | GitHub Actions</text>
+  </g>
+</svg>
