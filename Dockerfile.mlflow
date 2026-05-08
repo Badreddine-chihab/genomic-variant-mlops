@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 WORKDIR /mlflow
 
@@ -6,20 +6,21 @@ WORKDIR /mlflow
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     sqlite3 \
+    bash \
     && rm -rf /var/lib/apt/lists/*
 
-# Install MLflow with specific version
-RUN pip install --no-cache-dir mlflow==2.14.1
+# Keep the server aligned with the local MLflow 3 metadata/schema used by training.
+RUN pip install --no-cache-dir mlflow==3.10.1
 
 # Create directory for artifacts
 RUN mkdir -p /mlflow/mlruns
 
+# Copy entrypoint and registration scripts
+COPY entrypoint.sh /entrypoint.sh
+COPY src/model/register_model.py /register_model.py
+RUN chmod +x /entrypoint.sh
+
 EXPOSE 5000
 
-# Launch MLflow with resource limits
-CMD ["mlflow", "server", \
-     "--backend-store-uri", "sqlite:////mlflow/mlflow.db", \
-     "--default-artifact-root", "/mlflow/mlruns", \
-     "--host", "0.0.0.0", \
-     "--port", "5000", \
-     "--workers", "2"]
+# Launch MLflow with model registration
+ENTRYPOINT ["/entrypoint.sh"]

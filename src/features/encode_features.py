@@ -1,189 +1,170 @@
-import streamlit as st
-import pandas as pd
-import polars as pl
-import numpy as np
-import mlflow.pyfunc
-from bridge import fetch_features_from_s3
+import logging
+import sys
+from pathlib import Path
 
-# --- CONFIGURATION & CONSTANTES ---
-st.set_page_config(page_title="GenoPredict Portal", layout="wide", page_icon="🧬")
+import numpy as np
+import pandas as pd
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.features.schema_contract import CATEGORICAL_FEATURES, FEATURE_ORDER
+from src.orchestration.config_utils import ConfigManager
+
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
+
 
 CHR_LENGTHS = {
-    "1":248956422,"2":242193529,"3":198295559,"4":190214555,"5":181538259,
-    "6":170805979,"7":159345973,"8":145138636,"9":138394717,"10":133797422,
-    "11":135086622,"12":133275309,"13":114364328,"14":107043718,"15":101991189,
-    "16":90338345,"17":83257441,"18":80373285,"19":58617616,"20":64444167,
-    "21":46709983,"22":50818468,"X":156040895,"Y":57227415, "M": 16569
+    "1": 248956422,
+    "2": 242193529,
+    "3": 198295559,
+    "4": 190214555,
+    "5": 181538259,
+    "6": 170805979,
+    "7": 159345973,
+    "8": 145138636,
+    "9": 138394717,
+    "10": 133797422,
+    "11": 135086622,
+    "12": 133275309,
+    "13": 114364328,
+    "14": 107043718,
+    "15": 101991189,
+    "16": 90338345,
+    "17": 83257441,
+    "18": 80373285,
+    "19": 58617616,
+    "20": 64444167,
+    "21": 46709983,
+    "22": 50818468,
+    "X": 156040895,
+    "Y": 57227415,
+    "M": 16569,
 }
 
-# 1. CHARGEMENT DU MODÈLE
-mlflow.set_tracking_uri("http://localhost:5000")
+TRANSITIONS = {"A_G", "G_A", "C_T", "T_C"}
+TRANVERSIONS = {"A_C", "C_A", "A_T", "T_A", "C_G", "G_C", "G_T", "T_G"}
 
-@st.cache_resource
-def load_production_model():
-    model_uri = "models:/GenomicVariantModel/Production"
-    try:
-        return mlflow.pyfunc.load_model(model_uri)
-    except Exception as e:
-        st.error(f"❌ Erreur MLflow : {e}")
-        return None
 
-model = load_production_model()
+def _first_base(series: pd.Series, default: str = "N") -> pd.Series:
+    return (
+        series.fillna(default)
+        .astype(str)
+        .str.upper()
+        .str.slice(0, 1)
+        .replace({"": default})
+    )
 
-# --- FONCTION DE FEATURE ENGINEERING (SYNC AVEC TES SCRIPTS) ---
-def prepare_inference_data(raw_pandas_df):
-    """Fusion de encode_features.py et optimizations.py adaptée à l'inférence."""
-    try:
-        # Conversion Pandas -> Polars pour utiliser ta logique exacte
-        ldf = pl.from_pandas(raw_pandas_df).lazy()
 
-        # 1. Mapping initial
-        column_mapping = {
-            "#chr": "CHROM",
-            "pos(1-based)": "POS",
-            "ref": "REF",
-            "alt": "ALT",
-            "gnomAD_exomes_AF": "ALT_FREQ",
-            "CADD_phred": "CADD",
-            "SIFT_score": "SIFT",
-            "Polyphen2_HDIV_score": "PolyPhen"
-        }
-        
-        # On ne garde que les colonnes présentes
-        available_mapping = {k: v for k, v in column_mapping.items() if k in ldf.columns}
-        ldf = ldf.rename(available_mapping)
+def encode_features(input_path: Path, output_path: Path) -> pd.DataFrame:
+    logger.info("Loading model-ready data from %s", input_path)
+    if not input_path.exists():
+        raise FileNotFoundError(f"Input dataset not found: {input_path}")
 
-        # 2. Chromosome Lengths
-        chr_info = pl.DataFrame({
-            "CHROM": list(CHR_LENGTHS.keys()),
-            "CHR_Length": list(CHR_LENGTHS.values())
-        }).with_columns(pl.col("CHROM").cast(pl.String)).lazy()
+    df = pd.read_parquet(input_path)
+    required = {
+        "#chr",
+        "pos(1-based)",
+        "ref",
+        "alt",
+        "SIFT_score",
+        "Polyphen2_HDIV_score",
+        "CADD_phred",
+        "gnomAD_exomes_AF",
+        "target",
+    }
+    missing = sorted(required.difference(df.columns))
+    if missing:
+        raise ValueError(f"Model-ready dataset is missing required columns: {missing}")
 
-        ldf = ldf.with_columns(pl.col("CHROM").str.replace("chr", "")) \
-                 .join(chr_info, on="CHROM", how="left")
+    out = pd.DataFrame(index=df.index)
+    out["CHROM"] = df["#chr"].astype(str).str.replace("chr", "", regex=False)
+    out["SIFT"] = pd.to_numeric(df["SIFT_score"], errors="coerce").fillna(-1.0)
+    out["PolyPhen"] = pd.to_numeric(df["Polyphen2_HDIV_score"], errors="coerce").fillna(-1.0)
+    out["CADD"] = pd.to_numeric(df["CADD_phred"], errors="coerce").fillna(-1.0)
+    out["ALT_FREQ"] = pd.to_numeric(df["gnomAD_exomes_AF"], errors="coerce").fillna(0.0)
+    out["Target"] = pd.to_numeric(df["target"], errors="coerce").fillna(0).astype("int32")
 
-        # 3. InDels & Flags (Logique de encode_features.py)
-        ldf = ldf.with_columns([
-            (pl.col("REF").str.len_bytes() != pl.col("ALT").str.len_bytes()).cast(pl.Int8).alias("Is_InDel"),
-            (pl.col("ALT").str.len_bytes() - pl.col("REF").str.len_bytes()).cast(pl.Int16).alias("Delta_Length")
-        ]).with_columns([
-            pl.col("Delta_Length").abs().cast(pl.Int16).alias("indel_size"),
-            ((pl.col("Is_InDel") == 1) & (pl.col("Delta_Length").abs() % 3 != 0)).cast(pl.Int8).alias("Is_Frameshift")
-        ])
+    ref = df["ref"].fillna("").astype(str)
+    alt = df["alt"].fillna("").astype(str)
+    ref_len = ref.str.len()
+    alt_len = alt.str.len()
 
-        # 4. Base & Mutation Type
-        ldf = ldf.with_columns([
-            pl.col("REF").str.slice(0, 1).str.to_uppercase().alias("REF_Base"),
-            pl.when(pl.col("Is_InDel") == 0)
-              .then(pl.col("ALT").str.slice(0, 1).str.to_uppercase())
-              .otherwise(pl.lit("-")).alias("ALT_Base")
-        ]).with_columns([
-            pl.when(pl.col("Is_InDel") == 0)
-              .then(pl.concat_str([pl.col("REF_Base"), pl.lit("_"), pl.col("ALT_Base")]))
-              .otherwise(pl.lit("INDEL")).alias("mutation_type")
-        ])
+    out["Is_InDel"] = (ref_len != alt_len).astype("int8")
+    out["Delta_Length"] = (alt_len - ref_len).astype("int16")
+    out["indel_size"] = out["Delta_Length"].abs().astype("int16")
+    out["Is_Frameshift"] = (
+        (out["Is_InDel"] == 1) & ((out["indel_size"] % 3) != 0)
+    ).astype("int8")
 
-        # 5. Frequency & Scores (Imputation incluse de optimizations.py)
-        ldf = ldf.with_columns([
-            pl.col("ALT_FREQ").fill_null(0.0),
-            pl.col("SIFT").fill_null(-1.0).cast(pl.Float32),
-            pl.col("PolyPhen").fill_null(-1.0).cast(pl.Float32),
-            pl.col("CADD").fill_null(-1.0).cast(pl.Float32)
-        ]).with_columns([
-            (pl.col("ALT_FREQ") + 1.0).log().alias("freq_log"),
-            (pl.col("ALT_FREQ") < 0.005).cast(pl.Int8).alias("rare_variant"),
-            (pl.col("ALT_FREQ") < 0.001).cast(pl.Int8).alias("is_ultra_rare"),
-            (pl.col("indel_size") > 5).cast(pl.Int8).alias("is_large_indel"),
-            (pl.col("CADD") > 20).cast(pl.Int8).alias("CADD_high"),
-            (pl.col("CADD") > 30).cast(pl.Int8).alias("CADD_very_high"),
-            (pl.col("SIFT") < 0.05).cast(pl.Int8).alias("SIFT_damaging")
-        ])
+    out["REF_Base"] = _first_base(ref)
+    alt_base = _first_base(alt)
+    out["ALT_Base"] = np.where(out["Is_InDel"] == 1, "-", alt_base)
+    out["mutation_type"] = np.where(
+        out["Is_InDel"] == 1,
+        "INDEL",
+        out["REF_Base"].astype(str) + "_" + out["ALT_Base"].astype(str),
+    )
 
-        # 6. Impact & Interactions
-        ldf = ldf.with_columns([
-            (pl.col("Is_Frameshift") * 3 + pl.col("is_large_indel") * 2 + 
-             pl.col("indel_size") * 0.1 + pl.col("is_ultra_rare") * 2 + 
-             pl.col("CADD_high") * 2).cast(pl.Float32).alias("Impact_Score")
-        ]).with_columns([
-            (pl.col("rare_variant") * pl.col("Impact_Score")).alias("rare_impact"),
-            (pl.col("POS") / pl.col("CHR_Length")).cast(pl.Float32).alias("normalized_pos"),
-            ((pl.col("Impact_Score") > 0.7) & (pl.col("ALT_FREQ") < 0.01)).cast(pl.Int8).alias("high_impact_rare"),
-            (pl.col("CADD") * (1.0 / (pl.col("ALT_FREQ") + 1e-9)).log1p()).alias("cadd_rare_interaction")
-        ])
+    out["freq_log"] = np.log1p(out["ALT_FREQ"]).astype("float32")
+    out["rare_variant"] = (out["ALT_FREQ"] < 0.005).astype("int8")
+    out["is_ultra_rare"] = (out["ALT_FREQ"] < 0.001).astype("int8")
+    out["is_large_indel"] = (out["indel_size"] > 5).astype("int8")
+    out["CADD_high"] = (out["CADD"] > 20).astype("int8")
+    out["CADD_very_high"] = (out["CADD"] > 30).astype("int8")
+    out["SIFT_damaging"] = ((out["SIFT"] >= 0) & (out["SIFT"] < 0.05)).astype("int8")
+    out["PolyPhen_damaging"] = (out["PolyPhen"] > 0.85).astype("int8")
+    out["CADD_x_rare"] = (out["CADD"] * out["rare_variant"]).astype("float32")
 
-        # 7. Final Clean-up (Match XGBoost Expectation)
-        # On définit l'ordre exact des colonnes que ton modèle attendait dans l'erreur précédente
-        final_cols = [
-            'CHROM', 'SIFT', 'PolyPhen', 'CADD', 'ALT_FREQ', 'Is_InDel', 'Delta_Length', 
-            'indel_size', 'Is_Frameshift', 'REF_Base', 'ALT_Base', 'mutation_type', 
-            'freq_log', 'rare_variant', 'is_ultra_rare', 'is_large_indel', 'CADD_high', 
-            'CADD_very_high', 'SIFT_damaging', 'Impact_Score', 'rare_impact', 
-            'normalized_pos', 'is_transition', 'high_impact_rare', 'cadd_rare_interaction'
-        ]
-        
-        # Note: Certaines stats comme 'chrom_freq_mean' nécessitent tout le chromosome. 
-        # Pour une seule ligne, on met des valeurs neutres ou on les retire si le modèle optimisé ne les veut plus.
-        
-        # Exécution du pipeline lazy
-        res_df = ldf.collect().to_pandas()
-        
-        # On s'assure que toutes les colonnes attendues par TON modèle sont là (même à 0 si besoin)
-        # D'après ton erreur précédente, voici la liste :
-        expected_by_model = [
-            'pos_bin', 'ALT_FREQ', 'CADD_x_rare', 'CADD', 'CADD_high', 'Is_Frameshift', 
-            'SIFT', 'rare_variant', 'Impact_Score', 'pos_freq_interaction', 
-            'PolyPhen_damaging', 'Is_InDel', 'chrom_freq_mean', 'normalized_pos', 
-            'CHROM', 'mutation_type', 'rare_impact', 'ALT_Base', 'is_ultra_rare', 
-            'CADD_very_high', 'indel_size', 'SIFT_damaging', 'Delta_Length', 
-            'is_transition', 'REF_Base', 'chrom_rare_rate', 'freq_log', 'PolyPhen', 
-            'is_large_indel', 'is_transversion'
-        ]
-        
-        for col in expected_by_model:
-            if col not in res_df.columns:
-                res_df[col] = 0 # Valeur par défaut pour éviter le crash
-                
-        return res_df[expected_by_model]
-        
-    except Exception as e:
-        st.error(f"❌ Erreur Preprocessing : {e}")
-        return None
+    out["Impact_Score"] = (
+        out["Is_Frameshift"] * 3.0
+        + out["is_large_indel"] * 2.0
+        + out["indel_size"] * 0.1
+        + out["is_ultra_rare"] * 2.0
+        + out["CADD_high"] * 2.0
+    ).astype("float32")
+    out["rare_impact"] = (out["rare_variant"] * out["Impact_Score"]).astype("float32")
 
-# --- UI INTERFACE ---
-st.title("🧬 GenoPredict Portal")
-st.divider()
+    positions = pd.to_numeric(df["pos(1-based)"], errors="coerce").fillna(0.0)
+    chr_lengths = out["CHROM"].map(CHR_LENGTHS).astype("float64")
+    out["normalized_pos"] = (positions / chr_lengths).replace([np.inf, -np.inf], 0).fillna(0)
+    out["normalized_pos"] = out["normalized_pos"].clip(lower=0, upper=1).astype("float32")
+    out["pos_bin"] = np.floor(out["normalized_pos"] * 10).clip(0, 9).astype("int8")
+    out["pos_freq_interaction"] = (out["normalized_pos"] * out["ALT_FREQ"]).astype("float32")
 
-with st.sidebar:
-    st.header("🔍 Variant Lookup")
-    chrom = st.selectbox("Chromosome", [str(i) for i in range(1, 23)] + ["X", "Y", "M"])
-    pos = st.text_input("Position (hg38)", value="1022225")
-    predict_btn = st.button("🚀 Analyser")
+    substitutions = out["mutation_type"].astype(str)
+    out["is_transition"] = substitutions.isin(TRANSITIONS).astype("int8")
+    out["is_transversion"] = substitutions.isin(TRANVERSIONS).astype("int8")
 
-if predict_btn:
-    raw_data = fetch_features_from_s3(chrom, pos)
-    
-    if raw_data is not None and not raw_data.empty:
-        st.success("✅ Données extraites de S3.")
+    out["chrom_freq_mean"] = (
+        out.groupby("CHROM", observed=False)["ALT_FREQ"].transform("mean").fillna(0).astype("float32")
+    )
+    out["chrom_rare_rate"] = (
+        out.groupby("CHROM", observed=False)["rare_variant"].transform("mean").fillna(0).astype("float32")
+    )
 
-        if model:
-            # On applique la même logique que encode_features.py + optimizations.py
-            X_input = prepare_inference_data(raw_data)
-            
-            if X_input is not None:
-                # Inférence MLflow
-                prediction_prob = model.predict(X_input)[0]
-                
-                label = "PATHOGÈNE" if prediction_prob > 0.5 else "BÉNIN"
-                color = "#e63946" if label == "PATHOGÈNE" else "#2a9d8f"
+    for col in ["SIFT", "PolyPhen", "CADD", "ALT_FREQ"]:
+        out[col] = out[col].astype("float32")
 
-                st.markdown(f"""
-                    <div style="padding:20px; border-radius:10px; border:3px solid {color}; text-align:center; color:{color}; font-size:24px; font-weight:bold;">
-                        Diagnostic : {label} ({prediction_prob:.2%})
-                    </div>
-                """, unsafe_allow_html=True)
+    for col in CATEGORICAL_FEATURES:
+        out[col] = out[col].astype("category")
 
-        # Affichage des infos brutes pour vérification
-        st.subheader("📋 Aperçu dbNSFP")
-        st.dataframe(raw_data)
-    else:
-        st.error("❌ Variant non trouvé.")
+    final = out[FEATURE_ORDER + ["Target"]]
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    final.to_parquet(output_path, index=False)
+    logger.info("Saved encoded training dataset to %s with shape %s", output_path, final.shape)
+    return final
+
+
+def main() -> None:
+    cm = ConfigManager()
+    input_path = cm.get_path("paths.data.model_ready")
+    output_path = cm.get_path("paths.data.final_training")
+    encode_features(input_path, output_path)
+
+
+if __name__ == "__main__":
+    main()

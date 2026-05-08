@@ -1,129 +1,61 @@
-import sys
 import logging
-import mlflow
-from mlflow.tracking import MlflowClient
-from mlflow.exceptions import MlflowException
+import sys
 from pathlib import Path
 
-# --- PATH RESOLUTION ---
+import mlflow
+from mlflow.tracking import MlflowClient
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-# Imports AFTER path fix
+from src.model.register_model import MODEL_ALIAS, MODEL_NAME, MIN_METRIC, promote_best_model
 from src.orchestration.config_utils import ConfigManager, setup_mlflow
 
-# Logger
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-
-
-def _resolve_model_uri(client: MlflowClient, experiment_id: str, run_id: str) -> tuple[str, str | None]:
-    """
-    MLflow 3 stores logged models under mlruns/<experiment>/models/m-... instead
-    of the run artifact directory. Use the run-based URI for registration.
-    """
-    return f"runs:/{run_id}/model", None
 
 
 def promote_model():
     """
-    Promote best model to Production based on PR-AUC threshold
-    """
+    Promote the best eligible training run to the Production alias.
 
-    # 1. INIT CONFIG
+    Governance rule:
+    - only FINISHED runs tagged ``stage=training`` are considered
+    - the selected run is the highest PR-AUC run above the configured threshold
+    """
     cm = ConfigManager()
     cfg = cm.config
-    setup_mlflow(cfg)
-
-    tracking_uri = cfg.mlflow.tracking_uri
+    tracking_uri = setup_mlflow(cfg)
     experiment_name = cfg.mlflow.experiment_name
 
-    MODEL_NAME = "GenomicVariantModel"
-    THRESHOLD_PR_AUC = 0.80
-
-    logger.info(f"📡 MLflow Tracking URI: {tracking_uri}")
+    logger.info("📡 MLflow Tracking URI: %s", tracking_uri)
+    logger.info("🏛️ Promotion rule: best finished training run by pr_auc >= %.4f", MIN_METRIC)
     mlflow.set_tracking_uri(tracking_uri)
 
-    client = MlflowClient()
-
-    # 2. GET EXPERIMENT
-    experiment = client.get_experiment_by_name(experiment_name)
-    if experiment is None:
-        logger.error(f"❌ Experiment '{experiment_name}' not found.")
-        return
-
-    # 3. GET LAST TRAINING RUN (FIXED FILTER 🔥)
-    runs = client.search_runs(
-        experiment_ids=[experiment.experiment_id],
-        filter_string="tags.stage = 'training' AND attributes.status = 'FINISHED'",
-        order_by=["attributes.start_time DESC"],
-        max_results=1
+    result = promote_best_model(
+        client=MlflowClient(),
+        model_name=MODEL_NAME,
+        alias=MODEL_ALIAS,
+        experiment_name=experiment_name,
+        min_metric=MIN_METRIC,
+        tracking_uri=tracking_uri,
     )
 
-    if not runs:
-        logger.error("❌ No successful TRAINING runs found.")
-        logger.info("💡 Make sure train_model logs tag: stage=training")
-        return
+    if result is None:
+        logger.warning("🚫 No eligible model was promoted.")
+        return None
 
-    last_run = runs[0]
-    run_id = last_run.info.run_id
-    metrics = last_run.data.metrics
-
-    # 4. CHECK METRICS
-    if "pr_auc" not in metrics:
-        logger.error("❌ 'pr_auc' metric missing.")
-        logger.error(f"Available metrics: {list(metrics.keys())}")
-        return
-
-    current_pr_auc = metrics["pr_auc"]
-
-    logger.info(f"📊 Run ID: {run_id}")
-    logger.info(f"🎯 PR-AUC: {current_pr_auc:.4f} (threshold={THRESHOLD_PR_AUC})")
-
-    # 5. GOVERNANCE DECISION
-    if current_pr_auc < THRESHOLD_PR_AUC:
-        logger.warning("🚫 Model NOT promoted (below threshold).")
-        return
-
-    logger.info("✅ Model passed threshold → promoting...")
-
-    try:
-        model_uri, model_id = _resolve_model_uri(client, experiment.experiment_id, run_id)
-        logger.info(f"📦 Model source URI: {model_uri}")
-
-        # Check if model already exists
-        try:
-            client.get_registered_model(MODEL_NAME)
-            logger.info(f"📦 Model '{MODEL_NAME}' exists → creating new version")
-
-            mv = client.create_model_version(
-                name=MODEL_NAME,
-                source=model_uri,
-                run_id=run_id,
-            )
-
-        except MlflowException:
-            logger.info(f"📦 Creating new registered model '{MODEL_NAME}'")
-
-            mv = mlflow.register_model(model_uri, MODEL_NAME)
-
-        logger.info(f"📦 Registered version: {mv.version}")
-
-        # Set Production alias
-        client.set_registered_model_alias(
-            name=MODEL_NAME,
-            alias="Production",
-            version=mv.version
-        )
-
-        logger.info(f"🚀 SUCCESS: Model v{mv.version} → @Production")
-
-    except Exception as e:
-        logger.error(f"❌ Promotion failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return
+    logger.info(
+        "🚀 SUCCESS: Model v%s → @%s from run %s (%.4f %s)",
+        result.version,
+        result.alias,
+        result.run_id,
+        result.metric_value,
+        result.metric_name,
+    )
+    return result
 
 
 if __name__ == "__main__":

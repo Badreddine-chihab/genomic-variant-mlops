@@ -44,7 +44,25 @@ Services:
 - Prometheus: `http://localhost:9090`
 - Grafana: `http://localhost:3001` (`admin` / `admin`)
 
-MLflow state is stored in the Docker volume `mlflow_data`, so local runs no longer create `mlruns/` or `mlflow.db` in the project root.
+MLflow state is shared with the project root:
+
+- `./mlflow.db` is mounted as the tracking and registry database.
+- `./mlruns` is mounted as the artifact store.
+
+The MLflow service also serves artifacts through its HTTP proxy, and the API
+mounts `./mlruns` read-only as a compatibility fallback for existing registry
+versions that point at `file:///mlflow/mlruns/...`.
+
+## Training Pipeline
+
+Run the full data-to-production pipeline with:
+
+`python run_pipeline.py`
+
+The pipeline pulls DVC data when needed, stitches raw chromosome files, encodes
+the training feature schema, trains XGBoost, runs cross-validation and SHAP
+interpretation, then promotes the best eligible training run by PR-AUC to
+`GenomicVariantModel@Production` in MLflow.
 
 The API exports live metrics at:
 

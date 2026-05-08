@@ -1,8 +1,26 @@
 import os
 import sys
 import subprocess
+import logging
 from pathlib import Path
-from prefect import flow, task, get_run_logger
+
+try:
+    from prefect import flow, task, get_run_logger
+except ImportError:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+    def flow(*_args, **_kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
+    def task(*_args, **_kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
+    def get_run_logger():
+        return logging.getLogger("run_pipeline")
 
 # --- CONFIGURATION DU CHEMIN RACINE ---
 # Ce fichier étant à la racine, son parent direct est le PROJECT_ROOT
@@ -42,17 +60,47 @@ def execute_script(script_path):
         print(result.stdout)
     return True
 
+
+def execute_command(command):
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(PROJECT_ROOT)
+    result = subprocess.run(
+        command,
+        env=env,
+        cwd=str(PROJECT_ROOT),
+        text=True,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        if result.stdout:
+            print(result.stdout)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
+        raise RuntimeError(f"Command failed with exit code {result.returncode}: {' '.join(command)}")
+    if result.stdout:
+        print(result.stdout)
+    return True
+
 # --- 1. TÂCHE : RÉCUPÉRATION DES DONNÉES (DVC) ---
 @task(name="Data-Pull-DVC")
 def pull_data(cm: ConfigManager, force: bool = False):
     logger = get_run_logger()
     raw_dir = cm.get_path("paths.data.raw_dir")
+    model_ready = cm.get_path("paths.data.model_ready")
+    final_training = cm.get_path("paths.data.final_training")
     
-    if force or not any(raw_dir.glob("*.gz")):
+    if not force and (final_training.exists() or model_ready.exists() or any(raw_dir.glob("*.gz"))):
+        logger.info("✅ Données déjà présentes localement.")
+        return
+
+    try:
         logger.info("📡 Synchronisation des données depuis S3 via DVC...")
-        os.system("dvc pull -f")
-    else:
-        logger.info("✅ Données RAW déjà présentes localement.")
+        execute_command(["dvc", "pull", "-f"])
+    except FileNotFoundError as exc:
+        raise RuntimeError("DVC is not installed. Install requirements with dvc-s3 support.") from exc
+    except RuntimeError:
+        logger.error("❌ Synchronisation DVC échouée.")
+        raise
 
 # --- 2. TÂCHE : ASSEMBLAGE (STITCHING) ---
 @task(name="Data-Stitching")

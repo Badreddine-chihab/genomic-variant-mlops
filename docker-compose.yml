@@ -9,6 +9,12 @@ services:
     volumes:
       - ./mlruns:/mlflow/mlruns
       - ./mlflow.db:/mlflow/mlflow.db
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/mlflow-ready && curl -fsS http://localhost:5000/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
     networks:
       - mlops_network
 
@@ -23,8 +29,10 @@ services:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - GENOPREDICT_MONITORING_LOG=/app/data/monitoring/predictions.jsonl
     depends_on:
-      - mlflow
+      mlflow:
+        condition: service_healthy
     volumes:
+      - ./mlruns:/mlflow/mlruns:ro
       - ./data/monitoring:/app/data/monitoring
       - ./reports/monitoring:/app/reports/monitoring
     networks:
