@@ -4,16 +4,11 @@
 }
 
 body {
-  background: radial-gradient(circle at top right, #eef4ff, #f7f8fa 40%, #ffffff);
+  background: #f6f8fb;
 }
 
 .card {
-  border-radius: 0.85rem;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.card:hover {
-  transform: translateY(-2px);
+  border-radius: 8px;
 }
 
 .navbar-brand {
@@ -26,7 +21,7 @@ body {
 }
 
 .nav-pills .nav-link {
-  border-radius: 0.7rem;
+  border-radius: 8px;
   color: #3b4252;
   font-weight: 600;
 }
@@ -37,6 +32,27 @@ body {
 
 .page-panel {
   animation: pageFade 260ms ease;
+}
+
+.review-select {
+  min-width: 132px;
+}
+
+.driver-progress {
+  height: 0.45rem;
+}
+
+.driver-progress .progress-bar {
+  background: linear-gradient(90deg, #198754, #0d6efd);
+}
+
+.table td,
+.table th {
+  vertical-align: middle;
+}
+
+.text-break {
+  word-break: break-word;
 }
 
 @keyframes pageFade {

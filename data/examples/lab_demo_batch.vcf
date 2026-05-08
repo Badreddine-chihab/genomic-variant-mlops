@@ -1,0 +1,10 @@
+##fileformat=VCFv4.2
+##source=genopredict-lab-demo
+##reference=GRCh38
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+11	209271	.	C	A	.	PASS	DEMO=benign_reference
+11	298524	.	A	C	.	PASS	DEMO=pathogenic_candidate
+11	298709	.	C	T	.	PASS	DEMO=pathogenic_candidate
+11	299372	.	G	C	.	PASS	DEMO=pathogenic_candidate
+11	236094	.	A	G	.	PASS	DEMO=benign_reference
+7	140453136	.	A	T	.	PASS	DEMO=not_found_example
