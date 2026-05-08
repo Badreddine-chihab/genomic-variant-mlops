@@ -27,6 +27,9 @@ Primary user flow:
 - UI library: Bootstrap
 - Main app: `frontend/src/App.jsx`
 - API client: `frontend/src/api.js`
+- Runtime routing: relative `/api/*` calls
+- Docker proxy: `frontend/nginx.conf` forwards `/api/*` and `/metrics` to `api:8000`
+- Local dev proxy: `frontend/vite.config.js` forwards `/api` and `/metrics` to `localhost:8000`
 
 ### 2.3 Model and MLOps
 
@@ -34,7 +37,21 @@ Primary user flow:
 - Evaluation: `src/model/eval.py`
 - Interpretation: `src/model/interpret.py`
 - Promotion/governance: `src/model/manager.py`
+- Best-run registration: `src/model/register_model.py`
 - Tracking/registry: MLflow
+
+The production model is selected by quality, not recency. The default policy
+promotes the best finished training run where `pr_auc >= 0.80` to the
+`GenomicVariantModel@Production` alias.
+
+Important environment variables:
+
+- `MLFLOW_TRACKING_URI`: MLflow tracking server, default `http://localhost:5000`
+- `GENOPREDICT_MODEL_NAME`: registered model name, default `GenomicVariantModel`
+- `GENOPREDICT_MODEL_ALIAS`: registry alias, default `Production`
+- `GENOPREDICT_PROMOTION_METRIC`: metric used for ranking, default `pr_auc`
+- `GENOPREDICT_MIN_PR_AUC`: minimum PR-AUC for promotion, default `0.80`
+- `MLFLOW_ARTIFACT_ROOT`: local artifact root used when resolving model files
 
 ## 3. API Endpoints
 
@@ -75,9 +92,46 @@ Source: `src/features/schema_contract.py`
 
 This prevents schema drift and `not in index` runtime failures.
 
-## 6. VCF Workflow
+## 6. Feature Lookup
 
-### 6.1 Parse
+Feature lookup is handled by `GET /api/fetch-features`.
+
+The API receives:
+
+- `chrom`
+- `pos`
+- `ref`
+- `alt`
+
+Lookup order:
+
+1. Local processed feature store:
+   `data/processed/model_ready_dataset.parquet`
+2. S3 feature store via DuckDB:
+   `src/ui/scripts/bridge.py`
+
+Docker mounts `./data/processed` into the API container as
+`/app/data/processed:ro`, so the local fallback works even though
+`data/processed/` is excluded from the image build context by `.dockerignore`.
+
+The local feature-store path can be overridden with:
+
+`GENOPREDICT_FEATURE_STORE_PATH`
+
+Column compatibility:
+
+- identity columns can be raw (`#chr`, `pos(1-based)`, `ref`, `alt`) or encoded
+  (`CHROM`, `POS`, `REF`, `ALT`)
+- PolyPhen can be read from `Polyphen2_HVAR_score`, `Polyphen2_HDIV_score`, or
+  `PolyPhen`
+
+Default demo variant:
+
+`11:209271 C>A`
+
+## 7. VCF Workflow
+
+### 7.1 Parse
 
 `/api/upload-vcf` reads VCF rows, skips headers, and extracts:
 
@@ -88,7 +142,7 @@ This prevents schema drift and `not in index` runtime failures.
 
 Multi-ALT rows are split into one record per ALT allele.
 
-### 6.2 Batch Predict
+### 7.2 Batch Predict
 
 `/api/vcf-batch-predict`:
 
@@ -101,15 +155,20 @@ Multi-ALT rows are split into one record per ALT allele.
 4. Returns aggregate counters:
    `processed`, `predicted`, `not_found`, `failed`
 
-## 7. Reliability Hardening Implemented
+## 8. Reliability Hardening Implemented
 
 - Lazy import for feature-store dependency in API endpoint path
 - VCF route fallback message when multipart dependency is missing
 - Feature-store lookup timeout in API to avoid hanging batch calls
+- Local parquet fallback before S3 lookup for Docker/offline demos
+- Same-origin frontend API calls through Nginx/Vite proxy to avoid browser fetch failures
+- MLflow healthcheck waits until the Production alias registration step has completed
+- API waits for healthy MLflow before startup in Docker Compose
+- API loads `models:/GenomicVariantModel@Production` and reports `loaded` when registry loading succeeds
 - Docker build cleanup with `.dockerignore`
 - Smoke tests for API health, single prediction, VCF upload, and VCF batch flow
 
-## 8. VCF Batch Reporting
+## 9. VCF Batch Reporting
 
 The React VCF Lab page includes a downloadable CSV report for batch runs.
 
@@ -124,36 +183,45 @@ The export contains:
 
 This is designed for professor-facing demos and quick review of batch results.
 
-## 9. Containerization
+## 10. Containerization
 
-### 9.1 API Container
+### 10.1 API Container
 
 - File: `Dockerfile`
 - Exposes port `8000`
 - Runs `uvicorn src.api.main:app`
+- Mounts `./data/processed` read-only for feature lookup
+- Mounts `./mlruns` read-only for legacy MLflow file artifact compatibility
+- Mounts monitoring/report folders for runtime outputs
 
-### 9.2 Frontend Container
+### 10.2 Frontend Container
 
 - File: `frontend/Dockerfile`
 - Multi-stage build (Node build + Nginx serve)
 - Exposes port `3000`
+- Proxies `/api/*` to `api:8000`
+- Proxies `/metrics` to `api:8000/metrics`
 
-### 9.3 MLflow Container
+### 10.3 MLflow Container
 
 - File: `Dockerfile.mlflow`
 - Exposes port `5000`
+- Mounts `./mlruns` and `./mlflow.db`
+- Registers/promotes the best eligible model before reporting healthy
 
-### 9.4 Compose
+### 10.4 Compose
 
 `docker-compose.yml` now runs:
 
 - `mlflow`
 - `api`
 - `frontend`
+- `prometheus`
+- `grafana`
 
 Streamlit is removed from compose orchestration.
 
-## 10. Local Development
+## 11. Local Development
 
 ### API
 
@@ -163,14 +231,73 @@ Streamlit is removed from compose orchestration.
 
 `cd frontend && npm install && npm run dev -- --host 0.0.0.0 --port 3000`
 
-## 11. Operations Notes
+The frontend dev server uses the same relative API paths as production and
+proxies them to `localhost:8000`.
+
+## 12. Pipeline and Model Promotion
+
+Run the complete data-to-production flow:
+
+`python run_pipeline.py`
+
+Pipeline tasks:
+
+1. DVC data pull when processed/raw data is missing
+2. raw chromosome stitching
+3. feature encoding
+4. XGBoost training
+5. cross-validation
+6. SHAP interpretation
+7. governance and MLflow promotion
+
+The governance step calls `src/model/manager.py`, which delegates the registry
+promotion to `src/model/register_model.py`.
+
+Manual registration is available when you only need to refresh the MLflow alias:
+
+`python -m src.model.register_model`
+
+Manual registration does not train a new model. It inspects existing finished
+training runs and promotes the best eligible one.
+
+## 13. Operations Notes
 
 - API tracking URI can be overridden by env var:
   `MLFLOW_TRACKING_URI`
-- Batch prediction requires feature-store connectivity and AWS credentials
+- Local feature lookup requires `data/processed/model_ready_dataset.parquet`
+- S3 fallback requires feature-store connectivity and AWS credentials
 - VCF upload requires `python-multipart`
+- MLflow UI is available at `http://localhost:5000`
+- API model state is visible at `GET /api/model-info`
 
-## 12. Known Constraints
+## 14. Verification
+
+Recommended Docker checks:
+
+`docker compose config`
+
+`docker compose build`
+
+`docker compose run --rm --no-deps api python -m pytest -q`
+
+`npm --prefix frontend run build`
+
+Useful smoke checks:
+
+`curl -sS http://localhost:3000/api/model-info`
+
+`curl -sS "http://localhost:3000/api/fetch-features?chrom=11&pos=209271&ref=C&alt=A"`
+
+`curl -sS -X POST http://localhost:3000/api/predict -H "Content-Type: application/json" --data '{"chrom":"11","pos":"209271","ref":"C","alt":"A","sift":0.781,"polyphen":0.0,"cadd":16.120001,"alt_freq":0.000001}'`
+
+Expected healthy model status:
+
+`"model_status": "loaded"`
+
+The fallback status `loaded_local_fallback` means the API could not load the
+MLflow registry alias and used the local JSON model instead.
+
+## 15. Known Constraints
 
 - VCF batch mode predicts only variants found in the feature store
 - Variants not found return `not_found` and require alternate handling
