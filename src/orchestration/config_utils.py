@@ -65,8 +65,22 @@ class ConfigManager:
             # PyYAML va appeler load_config_constructor quand il verra !load_config
             raw_dict = yaml.safe_load(f)
             # On transforme le dictionnaire Python en objet OmegaConf
-            return OmegaConf.create(raw_dict)
+            config = OmegaConf.create(raw_dict)
+            self._normalize_mlflow_tracking_uri(config)
+            return config
         # -----------------------------
+
+    def _normalize_mlflow_tracking_uri(self, config: DictConfig) -> None:
+        uri = OmegaConf.select(config, "mlflow.tracking_uri")
+        if not uri or not isinstance(uri, str):
+            return
+
+        if uri.startswith("sqlite:///") and not uri.startswith("sqlite:////"):
+            db_path = Path(uri.replace("sqlite:///", "", 1))
+            if not db_path.is_absolute():
+                db_path = self.project_root / db_path
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            OmegaConf.update(config, "mlflow.tracking_uri", f"sqlite:///{db_path}", merge=True)
 
     def get_path(self, path_key: str, as_absolute: bool = True) -> Path:
         value = OmegaConf.select(self.config, path_key)
@@ -86,6 +100,7 @@ class ConfigManager:
 
 def setup_mlflow(config: DictConfig):
     import mlflow
-    uri = config.get("mlflow.tracking_uri", "sqlite:///mlflow.db")
+    uri = os.getenv("MLFLOW_TRACKING_URI") or OmegaConf.select(config, "mlflow.tracking_uri") or "sqlite:///mlflow.db"
     mlflow.set_tracking_uri(uri)
-    mlflow.set_experiment(config.get("mlflow.experiment_name", "genomic_pfa"))
+    mlflow.set_experiment(OmegaConf.select(config, "mlflow.experiment_name") or "genomic_pfa")
+    return uri

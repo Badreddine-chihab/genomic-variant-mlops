@@ -22,5 +22,4 @@ CMD ["mlflow", "server", \
      "--default-artifact-root", "/mlflow/mlruns", \
      "--host", "0.0.0.0", \
      "--port", "5000", \
-     "--workers", "2", \
-     "--allowed-hosts", "*"]
+     "--workers", "2"]

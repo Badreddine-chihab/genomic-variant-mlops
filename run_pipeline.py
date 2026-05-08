@@ -27,11 +27,19 @@ def execute_script(script_path):
     result = subprocess.run(
         [sys.executable, str(PROJECT_ROOT / script_path)], 
         env=env,
-        cwd=str(PROJECT_ROOT)  # <-- LA CORRECTION MAGIQUE ICI
+        cwd=str(PROJECT_ROOT),  # <-- LA CORRECTION MAGIQUE ICI
+        text=True,
+        capture_output=True,
     )
     
     if result.returncode != 0:
+        if result.stdout:
+            print(result.stdout)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
         raise Exception(f"Le script {script_path} a échoué avec le code erreur : {result.returncode}.")
+    if result.stdout:
+        print(result.stdout)
     return True
 
 # --- 1. TÂCHE : RÉCUPÉRATION DES DONNÉES (DVC) ---

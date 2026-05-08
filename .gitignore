@@ -210,6 +210,7 @@ __marimo__/
 .venv/
 venv/
 __pycache__/
+node_modules/
 
 
 
@@ -218,6 +219,10 @@ models/
 mlruns/
 *.db
 mlflow.db
+
+# Runtime monitoring outputs
+data/monitoring/*.jsonl
+reports/monitoring/*.html
 
 # OS generated files
 .DS_Store

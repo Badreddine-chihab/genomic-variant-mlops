@@ -15,8 +15,8 @@ data:
 model:
   registry_dir: src/model
   saved_model_path: src/model/xgboost_gpu_model.json
-  artifacts_dir: mlruns                                   # MLflow artifacts
-  
+  artifacts_dir: mlruns
+
 # MLflow paths
 mlflow:
   tracking_dir: mlruns

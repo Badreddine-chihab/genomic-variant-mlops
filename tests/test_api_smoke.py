@@ -1,6 +1,8 @@
 import asyncio
 import importlib
+import os
 import sys
+import tempfile
 from unittest.mock import patch
 
 import numpy as np
@@ -31,6 +33,10 @@ class DummyUploadFile:
 def load_api_module():
     sys.modules.pop("src.api.main", None)
     sys.modules.pop("src.api", None)
+    log_path = os.path.join(tempfile.gettempdir(), "genopredict_test_predictions.jsonl")
+    if os.path.exists(log_path):
+        os.remove(log_path)
+    os.environ["GENOPREDICT_MONITORING_LOG"] = log_path
 
     with patch("mlflow.pyfunc.load_model", return_value=DummyModel()), patch(
         "mlflow.xgboost.load_model", return_value=DummyXGBModel()
@@ -49,6 +55,13 @@ def test_health_and_predict_smoke():
     assert pred.prediction == 0
     assert 0.0 <= pred.probability <= 1.0
     assert 0.0 <= pred.confidence_score <= 1.0
+
+    summary = api.monitoring_summary()
+    assert summary["successful_predictions"] == 1
+    assert summary["benign_predictions"] == 1
+
+    metrics_response = api.metrics()
+    assert b"genopredict_predictions_total" in metrics_response.body
 
 
 def test_vcf_upload_and_batch_predict_smoke():

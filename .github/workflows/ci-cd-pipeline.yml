@@ -1,85 +1,63 @@
-name: CI/CD Pipeline
+name: Docker Compose CI/CD
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   test:
-    name: Run Unit Tests
+    name: Test Application
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4  # Mise à jour vers v4 (Node.js 24)
-
-      - name: Set up Python
-        uses: actions/setup-python@v5  # Mise à jour vers v5 (Node.js 24)
-        with:
-          python-version: '3.11'  # Aligné avec ton Dockerfile Python 3.11
-
-      - name: Install Dependencies
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install pytest  # Assure-toi que pytest est installé
-
-      - name: Run Tests
-        # Le || true évite l'exit code 5 si tu n'as pas encore de fichiers tests
-        run: |
-          python -m pytest --junitxml=test-results.xml || echo "Aucun test trouvé pour le moment"
-
-  build:
-    name: Build Docker Images
-    runs-on: ubuntu-latest
-    needs: test
-    if: success() # Ne build que si les tests passent
-
-    steps:
-      - name: Checkout Code,
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Log in to DockerHub
-        uses: docker/login-action@v3
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          python-version: "3.11"
 
-      - name: Build and Push MLFlow Image
-        uses: docker/build-push-action@v5
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run Python tests
+        run: python -m pytest
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          context: .
-          file: ./Dockerfile.mlflow
-          push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/genopredict-mlflow:latest
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Build and Push Streamlit Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/genomic-variant-mlops:latest
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
 
-  deploy:
-    name: Deploy to AWS ECS
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+  compose:
+    name: Validate Docker Compose Stack
     runs-on: ubuntu-latest
-    needs: build
+    needs: test
 
     steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Deploy to AWS ECS
-        run: |
-          # Force new deployment to pull latest images
-          aws ecs update-service \
-            --cluster genopredict-cluster \
-            --service genopredict-service-test \
-            --force-new-deployment
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate compose configuration
+        run: docker compose config
+
+      - name: Build compose images
+        run: docker compose build

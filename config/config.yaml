@@ -18,8 +18,8 @@ pipeline:
   log_file: "logs/pipeline.log" 
 
 mlflow:
-  # Utilisation d'une DB locale pour éviter les erreurs de dossiers /home/
-  tracking_uri: "sqlite:////home/badr/genomic-variant-mlops/mlflow.db"
+  # Local default; Docker Compose overrides this with http://mlflow:5000.
+  tracking_uri: "sqlite:///mlflow.db"
   experiment_name: "genomic_pfa"
   tags:
     phase: "production"

@@ -27,6 +27,16 @@ export async function getModelInfo() {
   return parseResponse(response);
 }
 
+export async function getMonitoringSummary() {
+  const response = await fetch(`${API_BASE}/api/monitoring/summary`);
+  return parseResponse(response);
+}
+
+export async function getMonitoringPredictions(limit = 25) {
+  const response = await fetch(`${API_BASE}/api/monitoring/predictions?limit=${encodeURIComponent(limit)}`);
+  return parseResponse(response);
+}
+
 export async function fetchFeatures({ chrom, pos, ref, alt }) {
   const params = new URLSearchParams({
     chrom: String(chrom),

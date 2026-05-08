@@ -1,6 +1,4 @@
 import os
-import sys
-from pathlib import Path
 import streamlit as st
 import pandas as pd
 import polars as pl
@@ -8,16 +6,11 @@ import numpy as np
 import mlflow
 import mlflow.pyfunc
 
-# Ensure project root is importable when Streamlit runs this file directly.
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from src.ui.scripts.bridge import fetch_features_from_s3
+from scripts.bridge import fetch_features_from_s3
 from src.features.schema_contract import enforce_feature_contract
 
 # ==========================================
-# 🎨 CONFIG + STYLE
+# 🎨 CONFIG + STYLE 
 # ==========================================
 st.set_page_config(page_title="GenoPredict", layout="wide")
 
@@ -53,37 +46,6 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
-
-NUMERIC_DEFAULTS = {
-    "Is_InDel": 0,
-    "Delta_Length": 0,
-    "indel_size": 0,
-    "Is_Frameshift": 0,
-    "freq_log": 0.0,
-    "rare_variant": 0,
-    "is_ultra_rare": 0,
-    "is_large_indel": 0,
-    "CADD_high": 0,
-    "CADD_very_high": 0,
-    "SIFT_damaging": 0,
-    "PolyPhen_damaging": 0,
-    "CADD_x_rare": 0.0,
-    "Impact_Score": 0.0,
-    "rare_impact": 0.0,
-    "normalized_pos": 0.0,
-    "pos_bin": 0,
-    "pos_freq_interaction": 0.0,
-    "is_transition": 0,
-    "is_transversion": 0,
-    "chrom_freq_mean": 0.0,
-    "chrom_rare_rate": 0.0,
-}
-
-CATEGORICAL_DEFAULTS = {
-    "REF_Base": "N",
-    "ALT_Base": "N",
-    "mutation_type": "N_N",
-}
 
 # ==========================================
 # 🧬 CONSTANTS

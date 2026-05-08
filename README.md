@@ -7,12 +7,15 @@ Clinical-oriented genomic variant pathogenicity project with:
 - FastAPI inference backend
 - React + Bootstrap frontend (multi-page dashboard)
 - VCF upload and batch prediction workflow
+- Runtime monitoring with Prometheus, Grafana, and prediction event logs
+- Evidently-compatible drift report generation
 
 ## Current App Stack
 
 - Backend API: `src/api/main.py`
 - Frontend: `frontend/` (Vite + React + Bootstrap)
 - MLflow: `Dockerfile.mlflow`
+- Monitoring: `monitoring/` + `src/monitoring/`
 
 Streamlit is kept in repository for reference only and is no longer the primary UI.
 
@@ -38,6 +41,45 @@ Services:
 - Frontend: `http://localhost:3000`
 - API: `http://localhost:8000`
 - MLflow: `http://localhost:5000`
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3001` (`admin` / `admin`)
+
+MLflow state is stored in the Docker volume `mlflow_data`, so local runs no longer create `mlruns/` or `mlflow.db` in the project root.
+
+The API exports live metrics at:
+
+`http://localhost:8000/metrics`
+
+Runtime prediction events are stored in:
+
+`data/monitoring/predictions.jsonl`
+
+Monitoring summary endpoints:
+
+- `GET /api/monitoring/summary`
+- `GET /api/monitoring/predictions`
+
+Generate a drift report after running predictions:
+
+`python -m src.monitoring.evidently_report`
+
+The report is written to:
+
+`reports/monitoring/latest_drift_report.html`
+
+## CI/CD
+
+The GitHub Actions workflow is Docker Compose-only:
+
+- installs Python and frontend dependencies
+- runs Python tests
+- builds the React frontend
+- validates `docker-compose.yml`
+- builds all Compose images
+
+There is no AWS deployment step. For a VPS deployment, copy the repository or pull the branch on the server and run:
+
+`docker compose up --build -d`
 
 ## Verification
 

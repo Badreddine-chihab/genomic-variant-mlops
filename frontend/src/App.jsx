@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchFeatures, getHealth, getModelInfo, predictVariant, uploadVcf, predictVcfBatch } from "./api";
+import {
+  fetchFeatures,
+  getHealth,
+  getModelInfo,
+  getMonitoringPredictions,
+  getMonitoringSummary,
+  predictVariant,
+  predictVcfBatch,
+  uploadVcf
+} from "./api";
 
 const CHROMS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y", "M"];
 const STORAGE_KEY = "genopredict_prediction_history_v2";
@@ -610,6 +619,164 @@ function PageVcf({ onSelectVariant, onBatchResults }) {
   );
 }
 
+function formatPercent(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "N/A";
+  return `${(Number(value) * 100).toFixed(1)}%`;
+}
+
+function formatNumber(value, digits = 1) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "N/A";
+  return Number(value).toFixed(digits);
+}
+
+function PageMonitoring({ summary, events, loading, onRefresh }) {
+  const latestEvents = events?.items || [];
+  const grafanaUrl = `${window.location.protocol}//${window.location.hostname}:3001`;
+  const prometheusUrl = `${window.location.protocol}//${window.location.hostname}:9090`;
+  const metricsUrl = `${window.location.protocol}//${window.location.hostname}:8000/metrics`;
+
+  return (
+    <div className="page-panel">
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <div>
+          <h4 className="mb-1">Runtime Monitoring</h4>
+          <p className="text-secondary mb-0">Live model-serving health, prediction behavior, and recent event logs.</p>
+        </div>
+        <button className="btn btn-outline-primary" onClick={onRefresh} disabled={loading}>
+          {loading ? "Refreshing..." : "Refresh"}
+        </button>
+      </div>
+
+      <div className="row g-3 mb-3">
+        <div className="col-xl-3 col-md-6">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body">
+              <h6 className="text-secondary">Logged Events</h6>
+              <h2 className="mb-0">{summary?.total_predictions ?? 0}</h2>
+            </div>
+          </div>
+        </div>
+        <div className="col-xl-3 col-md-6">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body">
+              <h6 className="text-secondary">Pathogenic Rate</h6>
+              <h2 className="mb-0">{formatPercent(summary?.pathogenic_rate)}</h2>
+            </div>
+          </div>
+        </div>
+        <div className="col-xl-3 col-md-6">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body">
+              <h6 className="text-secondary">Avg Confidence</h6>
+              <h2 className="mb-0">{formatPercent(summary?.average_confidence)}</h2>
+            </div>
+          </div>
+        </div>
+        <div className="col-xl-3 col-md-6">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body">
+              <h6 className="text-secondary">Avg Latency</h6>
+              <h2 className="mb-0">{formatNumber(summary?.average_latency_ms, 1)} ms</h2>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="row g-3 mb-3">
+        <div className="col-xl-4">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-header bg-white border-0 py-3">
+              <h5 className="mb-0">Model Service</h5>
+            </div>
+            <div className="card-body">
+              <p className="mb-2"><span className="fw-semibold">API:</span> {summary?.api_status || "unknown"}</p>
+              <p className="mb-2"><span className="fw-semibold">Model:</span> {summary?.model_status || "unknown"}</p>
+              <p className="mb-2"><span className="fw-semibold">Failures:</span> {summary?.failed_predictions ?? 0}</p>
+              <p className="mb-0"><span className="fw-semibold">Low Confidence:</span> {summary?.low_confidence_predictions ?? 0}</p>
+            </div>
+          </div>
+        </div>
+        <div className="col-xl-4">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-header bg-white border-0 py-3">
+              <h5 className="mb-0">Prediction Sources</h5>
+            </div>
+            <div className="card-body">
+              {Object.entries(summary?.by_source || {}).length === 0 ? (
+                <p className="text-secondary mb-0">No events yet.</p>
+              ) : (
+                Object.entries(summary.by_source).map(([source, count]) => (
+                  <div key={source} className="d-flex justify-content-between mb-2">
+                    <span>{source}</span>
+                    <span className="badge text-bg-light">{count}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="col-xl-4">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-header bg-white border-0 py-3">
+              <h5 className="mb-0">Monitoring Tools</h5>
+            </div>
+            <div className="card-body d-grid gap-2">
+              <a className="btn btn-outline-primary" href={grafanaUrl} target="_blank" rel="noreferrer">Open Grafana</a>
+              <a className="btn btn-outline-secondary" href={prometheusUrl} target="_blank" rel="noreferrer">Open Prometheus</a>
+              <a className="btn btn-outline-dark" href={metricsUrl} target="_blank" rel="noreferrer">View Raw Metrics</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card shadow-sm border-0">
+        <div className="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+          <h5 className="mb-0">Recent Monitoring Events</h5>
+          <span className="badge text-bg-light">{latestEvents.length}</span>
+        </div>
+        <div className="table-responsive">
+          <table className="table table-striped table-hover mb-0 align-middle">
+            <thead className="table-light">
+              <tr>
+                <th>Time</th>
+                <th>Endpoint</th>
+                <th>Variant</th>
+                <th>Status</th>
+                <th>Prediction</th>
+                <th>Confidence</th>
+                <th>Latency</th>
+              </tr>
+            </thead>
+            <tbody>
+              {latestEvents.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="text-center text-secondary py-4">No monitoring events yet.</td>
+                </tr>
+              ) : (
+                latestEvents.map((row, idx) => (
+                  <tr key={`${row.timestamp}-${idx}`}>
+                    <td>{row.timestamp ? new Date(row.timestamp).toLocaleString() : "N/A"}</td>
+                    <td>{row.endpoint || "unknown"}</td>
+                    <td>{row.chrom && row.pos ? `${row.chrom}:${row.pos} ${row.ref || ""}>${row.alt || ""}` : "N/A"}</td>
+                    <td>
+                      <span className={`badge ${row.status === "success" ? "text-bg-success" : "text-bg-danger"}`}>
+                        {row.status || "unknown"}
+                      </span>
+                    </td>
+                    <td>{row.prediction === 1 ? "PATHOGENIC" : row.prediction === 0 ? "BENIGN" : "N/A"}</td>
+                    <td>{formatPercent(row.confidence_score)}</td>
+                    <td>{formatNumber(row.latency_ms, 1)} ms</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [page, setPage] = useState("overview");
   const [form, setForm] = useState(INITIAL_FORM);
@@ -620,6 +787,9 @@ export default function App() {
   const [lookupMessage, setLookupMessage] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);
   const [predictLoading, setPredictLoading] = useState(false);
+  const [monitoringLoading, setMonitoringLoading] = useState(false);
+  const [monitoringSummary, setMonitoringSummary] = useState(null);
+  const [monitoringEvents, setMonitoringEvents] = useState({ items: [] });
   const [fetchedRow, setFetchedRow] = useState(null);
   const [lastPrediction, setLastPrediction] = useState(null);
   const [history, setHistory] = useState(() => {
@@ -647,6 +817,26 @@ export default function App() {
       }
     };
     loadMeta();
+  }, []);
+
+  const loadMonitoring = async () => {
+    setMonitoringLoading(true);
+    try {
+      const [summaryRes, eventsRes] = await Promise.all([
+        getMonitoringSummary(),
+        getMonitoringPredictions(50)
+      ]);
+      setMonitoringSummary(summaryRes);
+      setMonitoringEvents(eventsRes);
+    } catch (e) {
+      setAppError(e.message);
+    } finally {
+      setMonitoringLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMonitoring();
   }, []);
 
   const dashboard = useMemo(() => {
@@ -722,6 +912,7 @@ export default function App() {
       };
       setLastPrediction(row);
       setHistory((prev) => [row, ...prev].slice(0, 200));
+      loadMonitoring();
       setPage("overview");
     } catch (e) {
       setAppError(e.message);
@@ -767,12 +958,14 @@ export default function App() {
       confidence: row.confidence_score ?? 0.5
     }));
     setHistory((prev) => [...newHistory, ...prev].slice(0, 200));
+    loadMonitoring();
   };
 
   const navItems = [
     ["overview", "Overview"],
     ["predict", "Predict"],
-    ["vcf", "VCF Lab"]
+    ["vcf", "VCF Lab"],
+    ["monitoring", "Monitoring"]
   ];
 
   return (
@@ -828,6 +1021,14 @@ export default function App() {
           />
         )}
         {page === "vcf" && <PageVcf onSelectVariant={handleSelectVcfVariant} onBatchResults={handleBatchResults} />}
+        {page === "monitoring" && (
+          <PageMonitoring
+            summary={monitoringSummary}
+            events={monitoringEvents}
+            loading={monitoringLoading}
+            onRefresh={loadMonitoring}
+          />
+        )}
       </div>
     </div>
   );

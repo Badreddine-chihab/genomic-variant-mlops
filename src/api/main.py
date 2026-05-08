@@ -2,9 +2,10 @@ import sys
 import os
 import logging
 import importlib.util
+import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, Response, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
@@ -21,6 +22,18 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.orchestration.config_utils import ConfigManager
 from src.features.schema_contract import FEATURE_ORDER, enforce_feature_contract
+from src.monitoring.prediction_logger import (
+    load_prediction_events,
+    log_prediction_event,
+    summarize_predictions,
+)
+from src.monitoring.prometheus_metrics import (
+    observe_feature_lookup,
+    observe_prediction,
+    observe_vcf_batch_records,
+    render_metrics,
+    set_model_loaded,
+)
 
 # Configuration du logger pour le terminal
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -144,6 +157,28 @@ except Exception as e:
     model_xgb = None
     MODEL_STATUS = "not_loaded"
 
+    fallback_model_path = PROJECT_ROOT / "src" / "model" / "xgboost_gpu_model.json"
+    if fallback_model_path.exists():
+        try:
+            import xgboost as xgb
+
+            logger.info(f"↩️ Loading local fallback model from: {fallback_model_path}")
+            fallback_model = xgb.XGBClassifier()
+            fallback_model.load_model(str(fallback_model_path))
+            model = fallback_model
+            model_xgb = fallback_model
+            model_uri = str(fallback_model_path)
+            MODEL_STATUS = "loaded_local_fallback"
+            logger.info("✅ Local fallback model loaded successfully.")
+        except Exception as fallback_error:
+            logger.error(f"❌ Local fallback model could not be loaded: {fallback_error}")
+
+set_model_loaded(MODEL_STATUS in {"loaded", "loaded_local_fallback"})
+
+
+def _active_model_uri() -> Optional[str]:
+    return model_uri if MODEL_STATUS in {"loaded", "loaded_local_fallback"} else None
+
 
 def _predict_with_probability(df: pd.DataFrame) -> tuple[int, Optional[float], float]:
     raw_pred = model.predict(df)
@@ -223,13 +258,62 @@ def _fetch_features_with_timeout(fetch_fn, chrom: str, pos: str, ref: str, alt: 
         future = executor.submit(fetch_fn, chrom, pos, ref, alt)
         return future.result(timeout=timeout_seconds)
 
+
+def _log_prediction_monitoring(
+    endpoint: str,
+    source: str,
+    payload: Dict[str, Any],
+    latency_seconds: float,
+    status: str = "success",
+    prediction: Optional[int] = None,
+    probability: Optional[float] = None,
+    confidence_score: Optional[float] = None,
+    error: Optional[str] = None,
+) -> None:
+    def _first_present(*keys: str) -> Any:
+        for key in keys:
+            value = payload.get(key)
+            if value is not None and value != "":
+                return value
+        return None
+
+    event = {
+        "endpoint": endpoint,
+        "source": source,
+        "status": status,
+        "model_uri": _active_model_uri(),
+        "latency_ms": round(latency_seconds * 1000.0, 3),
+        "chrom": _first_present("chrom", "CHROM", "#chr"),
+        "pos": _first_present("pos", "POS", "pos(1-based)"),
+        "ref": _first_present("ref", "REF"),
+        "alt": _first_present("alt", "ALT"),
+        "sift": _first_present("sift", "SIFT", "SIFT_score"),
+        "polyphen": _first_present("polyphen", "PolyPhen", "Polyphen2_HVAR_score"),
+        "cadd": _first_present("cadd", "CADD", "CADD_phred"),
+        "alt_freq": _first_present("alt_freq", "ALT_FREQ", "gnomAD_exomes_AF"),
+        "prediction": prediction,
+        "probability": probability,
+        "confidence_score": confidence_score,
+        "error": error,
+    }
+
+    log_prediction_event(event)
+    observe_prediction(
+        endpoint=endpoint,
+        status=status,
+        source=source,
+        latency_seconds=latency_seconds,
+        prediction=prediction,
+        confidence=confidence_score,
+    )
+
 @app.get("/", response_model=HealthResponse)
 def health():
     """API health check endpoint."""
     return {
         "api_status": "online", 
         "model_status": MODEL_STATUS,
-        "model_uri": model_uri if MODEL_STATUS == "loaded" else None
+        "model_uri": _active_model_uri()
     }
 
 @app.get("/api/health", response_model=HealthResponse)
@@ -238,7 +322,7 @@ def api_health():
     return {
         "api_status": "online", 
         "model_status": MODEL_STATUS,
-        "model_uri": model_uri if MODEL_STATUS == "loaded" else None
+        "model_uri": _active_model_uri()
     }
 
 @app.post("/predict", response_model=PredictionResponse)
@@ -249,7 +333,8 @@ def predict(data: dict):
             status_code=503, 
             detail="Le modèle n'a pas pu être chargé."
         )
-    
+
+    start = time.perf_counter()
     try:
         # 1. Conversion en DataFrame
         df = pd.DataFrame([data])
@@ -257,7 +342,17 @@ def predict(data: dict):
         df = enforce_feature_contract(df, fill_missing=True)
         
         prediction, probability, confidence = _predict_with_probability(df)
-        
+
+        _log_prediction_monitoring(
+            endpoint="/predict",
+            source="legacy",
+            payload=data,
+            latency_seconds=time.perf_counter() - start,
+            prediction=prediction,
+            probability=probability,
+            confidence_score=confidence,
+        )
+
         return {
             "status": "success",
             "prediction": prediction,
@@ -266,6 +361,14 @@ def predict(data: dict):
         }
     except Exception as e:
         logger.error(f"⚠️ Erreur de prédiction avec les données : {data}. Détail: {e}")
+        _log_prediction_monitoring(
+            endpoint="/predict",
+            source="legacy",
+            payload=data,
+            latency_seconds=time.perf_counter() - start,
+            status="error",
+            error=str(e),
+        )
         raise HTTPException(
             status_code=400, 
             detail=f"Erreur lors du traitement de la prédiction : {str(e)}"
@@ -282,11 +385,10 @@ def predict_enhanced(variant: VariantInput):
             status_code=503, 
             detail="Model could not be loaded."
         )
-    
+
+    start = time.perf_counter()
+    data: Dict[str, Any] = variant.model_dump(exclude_none=True)
     try:
-        # Convert Pydantic model to dict
-        data = variant.dict(exclude_none=True)
-        
         # Convert to DataFrame
         df = pd.DataFrame([data])
         
@@ -295,6 +397,16 @@ def predict_enhanced(variant: VariantInput):
         prediction, probability, confidence_score = _predict_with_probability(df)
         
         logger.info(f"Prediction for {variant.chrom}:{variant.pos} {variant.ref}/{variant.alt} = {prediction}")
+
+        _log_prediction_monitoring(
+            endpoint="/api/predict",
+            source="api",
+            payload=data,
+            latency_seconds=time.perf_counter() - start,
+            prediction=prediction,
+            probability=probability,
+            confidence_score=confidence_score,
+        )
         
         return PredictionResponse(
             status="success",
@@ -306,6 +418,14 @@ def predict_enhanced(variant: VariantInput):
         )
     except Exception as e:
         logger.error(f"Prediction error: {str(e)}")
+        _log_prediction_monitoring(
+            endpoint="/api/predict",
+            source="api",
+            payload=data,
+            latency_seconds=time.perf_counter() - start,
+            status="error",
+            error=str(e),
+        )
         raise HTTPException(
             status_code=400, 
             detail=f"Prediction error: {str(e)}"
@@ -346,12 +466,14 @@ def fetch_features(chrom: str, pos: str, ref: Optional[str] = None, alt: Optiona
         try:
             df = _fetch_features_with_timeout(fetch_features_from_s3, chrom, pos, ref_q, alt_q, timeout_seconds=20)
         except FuturesTimeoutError:
+            observe_feature_lookup("timeout")
             raise HTTPException(
                 status_code=504,
                 detail="Feature store lookup timed out. Please retry."
             )
         
         if df is None or df.empty:
+            observe_feature_lookup("not_found")
             logger.warning(f"Variant not found: chr{chrom}:{pos}")
             return S3FeaturesResponse(
                 found=False,
@@ -361,6 +483,7 @@ def fetch_features(chrom: str, pos: str, ref: Optional[str] = None, alt: Optiona
         
         # Convert DataFrame to list of dicts
         features_list = df.to_dict('records')
+        observe_feature_lookup("found")
         logger.info(f"Found {len(features_list)} records for chr{chrom}:{pos} {ref_q}>{alt_q}")
         
         return S3FeaturesResponse(
@@ -372,6 +495,7 @@ def fetch_features(chrom: str, pos: str, ref: Optional[str] = None, alt: Optiona
     except HTTPException:
         raise
     except Exception as e:
+        observe_feature_lookup("error")
         logger.error(f"Error fetching features from S3: {str(e)}")
         raise HTTPException(
             status_code=400,
@@ -450,11 +574,14 @@ if HAS_MULTIPART:
             raise HTTPException(status_code=400, detail=f"Failed to parse VCF: {str(e)}")
 else:
     @app.post("/api/upload-vcf", response_model=VCFUploadResponse)
-    async def upload_vcf_unavailable():
-        raise HTTPException(
-            status_code=503,
-            detail="VCF upload requires python-multipart. Install with: pip install python-multipart",
-        )
+    async def upload_vcf(file=None, limit: int = 200):
+        if file is None:
+            raise HTTPException(
+                status_code=503,
+                detail="VCF upload requires python-multipart. Install with: pip install python-multipart",
+            )
+        content = await file.read()
+        return _parse_vcf_content(content, limit)
 
 
 @app.post("/api/vcf-batch-predict", response_model=VCFBatchPredictResponse)
@@ -488,15 +615,27 @@ def vcf_batch_predict(request: VCFBatchPredictRequest):
     failed = 0
 
     for record in input_records:
+        start = time.perf_counter()
         chrom = str(record.chrom).replace("chr", "").upper()
         pos = str(record.pos)
         ref = str(record.ref).upper()
         alt = str(record.alt).upper()
+        payload_for_monitoring = {"chrom": chrom, "pos": pos, "ref": ref, "alt": alt}
 
         try:
             try:
                 df_store = _fetch_features_with_timeout(fetch_features_from_s3, chrom, pos, ref, alt, timeout_seconds=20)
             except FuturesTimeoutError:
+                observe_feature_lookup("timeout")
+                observe_vcf_batch_records("failed", 1)
+                _log_prediction_monitoring(
+                    endpoint="/api/vcf-batch-predict",
+                    source="vcf_batch",
+                    payload=payload_for_monitoring,
+                    latency_seconds=time.perf_counter() - start,
+                    status="error",
+                    error="Feature store lookup timed out.",
+                )
                 failed += 1
                 results.append(
                     VCFBatchPredictItem(
@@ -511,6 +650,8 @@ def vcf_batch_predict(request: VCFBatchPredictRequest):
                 )
                 continue
             if df_store is None or df_store.empty:
+                observe_feature_lookup("not_found")
+                observe_vcf_batch_records("not_found", 1)
                 not_found += 1
                 results.append(
                     VCFBatchPredictItem(
@@ -525,11 +666,24 @@ def vcf_batch_predict(request: VCFBatchPredictRequest):
                 )
                 continue
 
+            observe_feature_lookup("found")
             row = df_store.iloc[0].to_dict()
             payload = _variant_to_predict_payload(row, chrom, pos, ref, alt)
+            payload_for_monitoring.update(payload)
             df_pred = enforce_feature_contract(pd.DataFrame([payload]), fill_missing=True)
             prediction, probability, confidence = _predict_with_probability(df_pred)
+            observe_vcf_batch_records("predicted", 1)
             predicted += 1
+
+            _log_prediction_monitoring(
+                endpoint="/api/vcf-batch-predict",
+                source="vcf_batch",
+                payload=payload_for_monitoring,
+                latency_seconds=time.perf_counter() - start,
+                prediction=prediction,
+                probability=probability,
+                confidence_score=confidence,
+            )
 
             results.append(
                 VCFBatchPredictItem(
@@ -546,8 +700,17 @@ def vcf_batch_predict(request: VCFBatchPredictRequest):
                 )
             )
         except Exception as e:
+            observe_vcf_batch_records("failed", 1)
             failed += 1
             logger.error(f"Batch prediction failed for {chrom}:{pos} {ref}>{alt}: {e}")
+            _log_prediction_monitoring(
+                endpoint="/api/vcf-batch-predict",
+                source="vcf_batch",
+                payload=payload_for_monitoring,
+                latency_seconds=time.perf_counter() - start,
+                status="error",
+                error=str(e),
+            )
             results.append(
                 VCFBatchPredictItem(
                     chrom=chrom,
@@ -570,6 +733,32 @@ def vcf_batch_predict(request: VCFBatchPredictRequest):
         results=results,
     )
 
+
+@app.get("/metrics")
+def metrics():
+    payload, content_type = render_metrics()
+    return Response(content=payload, media_type=content_type)
+
+
+@app.get("/api/monitoring/summary")
+def monitoring_summary():
+    summary = summarize_predictions()
+    summary.update(
+        {
+            "api_status": "online",
+            "model_status": MODEL_STATUS,
+            "model_uri": _active_model_uri(),
+        }
+    )
+    return summary
+
+
+@app.get("/api/monitoring/predictions")
+def monitoring_predictions(limit: int = 100):
+    limit = max(1, min(1000, int(limit)))
+    return {"items": load_prediction_events(limit=limit), "limit": limit}
+
+
 @app.get("/api/model-info")
 def model_info():
     """
@@ -579,7 +768,7 @@ def model_info():
         "status": "success",
         "model_name": "GenomicVariantModel",
         "model_status": MODEL_STATUS,
-        "model_uri": model_uri if MODEL_STATUS == "loaded" else None,
+        "model_uri": _active_model_uri(),
         "version": "1.0",
         "description": "XGBoost classifier for genomic variant pathogenicity prediction",
         "input_features": FEATURE_ORDER,
