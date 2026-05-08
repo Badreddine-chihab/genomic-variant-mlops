@@ -7,7 +7,8 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - mlflow_data:/mlflow
+      - ./mlruns:/mlflow/mlruns
+      - ./mlflow.db:/mlflow/mlflow.db
     networks:
       - mlops_network
 
@@ -73,7 +74,6 @@ services:
       - mlops_network
 
 volumes:
-  mlflow_data:
   prometheus_data:
   grafana_data:
 

@@ -2,6 +2,7 @@ import sys
 import logging
 import mlflow
 from mlflow.tracking import MlflowClient
+from mlflow.exceptions import MlflowException
 from pathlib import Path
 
 # --- PATH RESOLUTION ---
@@ -20,19 +21,8 @@ logger = logging.getLogger(__name__)
 def _resolve_model_uri(client: MlflowClient, experiment_id: str, run_id: str) -> tuple[str, str | None]:
     """
     MLflow 3 stores logged models under mlruns/<experiment>/models/m-... instead
-    of the run artifact directory. Prefer that model ID so registry versions point
-    at a directory that contains MLmodel.
+    of the run artifact directory. Use the run-based URI for registration.
     """
-    if hasattr(client, "search_logged_models"):
-        logged_models = client.search_logged_models(
-            experiment_ids=[experiment_id],
-            filter_string=f"source_run_id = '{run_id}' AND name = 'model'",
-            max_results=1,
-        )
-        if logged_models:
-            logged_model = logged_models[0]
-            return f"models:/{logged_model.model_id}", logged_model.model_id
-
     return f"runs:/{run_id}/model", None
 
 
@@ -111,10 +101,9 @@ def promote_model():
                 name=MODEL_NAME,
                 source=model_uri,
                 run_id=run_id,
-                model_id=model_id,
             )
 
-        except mlflow.exceptions.RestException:
+        except MlflowException:
             logger.info(f"📦 Creating new registered model '{MODEL_NAME}'")
 
             mv = mlflow.register_model(model_uri, MODEL_NAME)
@@ -132,6 +121,8 @@ def promote_model():
 
     except Exception as e:
         logger.error(f"❌ Promotion failed: {e}")
+        import traceback
+        traceback.print_exc()
         return
 
 

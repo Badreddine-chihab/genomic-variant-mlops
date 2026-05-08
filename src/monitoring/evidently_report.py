@@ -87,10 +87,10 @@ def generate_report(reference_path: Path, output_path: Path) -> Path:
     reference, current = _select_common_columns(reference, current)
 
     try:
-        from evidently.metric_preset import DataDriftPreset, DataQualityPreset
-        from evidently.report import Report
+        from evidently import Report
+        from evidently.presets import DataDriftPreset, DataSummaryPreset
 
-        report = Report(metrics=[DataQualityPreset(), DataDriftPreset()])
+        report = Report(metrics=[DataSummaryPreset(), DataDriftPreset()])
         report.run(reference_data=reference, current_data=current)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         report.save_html(str(output_path))
