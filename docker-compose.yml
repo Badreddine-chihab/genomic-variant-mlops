@@ -33,6 +33,7 @@ services:
         condition: service_healthy
     volumes:
       - ./mlruns:/mlflow/mlruns:ro
+      - ./data/processed:/app/data/processed:ro
       - ./data/monitoring:/app/data/monitoring
       - ./reports/monitoring:/app/reports/monitoring
     networks:

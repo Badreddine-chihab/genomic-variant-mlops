@@ -50,7 +50,7 @@ function normalizeFetchedRow(row, currentForm) {
     ref: String(row.ref ?? row.REF ?? currentForm.ref).toUpperCase(),
     alt: String(row.alt ?? row.ALT ?? currentForm.alt).toUpperCase(),
     sift: extractNumeric(row, ["SIFT_score", "SIFT"], currentForm.sift),
-    polyphen: extractNumeric(row, ["Polyphen2_HVAR_score", "PolyPhen"], currentForm.polyphen),
+    polyphen: extractNumeric(row, ["Polyphen2_HVAR_score", "Polyphen2_HDIV_score", "PolyPhen"], currentForm.polyphen),
     cadd: extractNumeric(row, ["CADD_phred", "CADD"], currentForm.cadd),
     alt_freq: extractNumeric(row, ["gnomAD_exomes_AF", "ALT_FREQ"], currentForm.alt_freq)
   };

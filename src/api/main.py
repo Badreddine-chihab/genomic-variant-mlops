@@ -39,6 +39,13 @@ from src.monitoring.prometheus_metrics import (
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 HAS_MULTIPART = importlib.util.find_spec("multipart") is not None
+LOCAL_FEATURE_STORE_PATH = Path(
+    os.getenv(
+        "GENOPREDICT_FEATURE_STORE_PATH",
+        PROJECT_ROOT / "data" / "processed" / "model_ready_dataset.parquet",
+    )
+)
+_LOCAL_FEATURE_CACHE: Dict[str, Any] = {"path": None, "mtime": None, "df": None}
 
 cm = ConfigManager(project_root=PROJECT_ROOT)
 cfg = cm.config
@@ -217,6 +224,11 @@ def _predict_with_probability(df: pd.DataFrame) -> tuple[int, Optional[float], f
     return prediction, probability, confidence
 
 
+def _normalize_chrom(value: Any) -> str:
+    chrom = str(value).strip()
+    return chrom[3:] if chrom.lower().startswith("chr") else chrom.upper()
+
+
 def _variant_to_predict_payload(row: Dict[str, Any], chrom: str, pos: str, ref: str, alt: str) -> Dict[str, Any]:
     def _num(*keys: str) -> Optional[float]:
         for key in keys:
@@ -237,7 +249,7 @@ def _variant_to_predict_payload(row: Dict[str, Any], chrom: str, pos: str, ref: 
     }
 
     sift = _num("SIFT_score", "SIFT")
-    polyphen = _num("Polyphen2_HVAR_score", "PolyPhen")
+    polyphen = _num("Polyphen2_HVAR_score", "Polyphen2_HDIV_score", "PolyPhen")
     cadd = _num("CADD_phred", "CADD")
     alt_freq = _num("gnomAD_exomes_AF", "ALT_FREQ")
 
@@ -257,6 +269,62 @@ def _fetch_features_with_timeout(fetch_fn, chrom: str, pos: str, ref: str, alt: 
     with ThreadPoolExecutor(max_workers=1) as executor:
         future = executor.submit(fetch_fn, chrom, pos, ref, alt)
         return future.result(timeout=timeout_seconds)
+
+
+def _load_local_feature_store() -> Optional[pd.DataFrame]:
+    path = LOCAL_FEATURE_STORE_PATH
+    if not path.exists():
+        return None
+
+    mtime = path.stat().st_mtime
+    if (
+        _LOCAL_FEATURE_CACHE["path"] != str(path)
+        or _LOCAL_FEATURE_CACHE["mtime"] != mtime
+        or _LOCAL_FEATURE_CACHE["df"] is None
+    ):
+        _LOCAL_FEATURE_CACHE.update(
+            {
+                "path": str(path),
+                "mtime": mtime,
+                "df": pd.read_parquet(path),
+            }
+        )
+    return _LOCAL_FEATURE_CACHE["df"]
+
+
+def _fetch_features_from_local_store(chrom: str, pos: str, ref: str, alt: str) -> Optional[pd.DataFrame]:
+    df = _load_local_feature_store()
+    if df is None or df.empty:
+        return None
+
+    chrom_col = "#chr" if "#chr" in df.columns else "CHROM" if "CHROM" in df.columns else None
+    pos_col = "pos(1-based)" if "pos(1-based)" in df.columns else "POS" if "POS" in df.columns else None
+    ref_col = "ref" if "ref" in df.columns else "REF" if "REF" in df.columns else None
+    alt_col = "alt" if "alt" in df.columns else "ALT" if "ALT" in df.columns else None
+    if not all([chrom_col, pos_col, ref_col, alt_col]):
+        logger.warning(f"Local feature store {LOCAL_FEATURE_STORE_PATH} is missing variant identity columns.")
+        return None
+
+    mask = (
+        df[chrom_col].map(_normalize_chrom).eq(_normalize_chrom(chrom))
+        & df[pos_col].astype(str).eq(str(pos).strip())
+        & df[ref_col].astype(str).str.upper().eq(str(ref).strip().upper())
+        & df[alt_col].astype(str).str.upper().eq(str(alt).strip().upper())
+    )
+    result = df.loc[mask].head(1).copy()
+    return result if not result.empty else None
+
+
+def _fetch_features_from_feature_store(fetch_fn, chrom: str, pos: str, ref: str, alt: str) -> tuple[Optional[pd.DataFrame], str]:
+    local_df = _fetch_features_from_local_store(chrom, pos, ref, alt)
+    if local_df is not None and not local_df.empty:
+        return local_df, f"local feature store ({LOCAL_FEATURE_STORE_PATH})"
+
+    remote_df = _fetch_features_with_timeout(fetch_fn, chrom, pos, ref, alt, timeout_seconds=20)
+    if remote_df is not None and not remote_df.empty:
+        return remote_df, "S3 feature store"
+
+    return remote_df, "feature store"
 
 
 def _log_prediction_monitoring(
@@ -464,7 +532,7 @@ def fetch_features(chrom: str, pos: str, ref: Optional[str] = None, alt: Optiona
             )
 
         try:
-            df = _fetch_features_with_timeout(fetch_features_from_s3, chrom, pos, ref_q, alt_q, timeout_seconds=20)
+            df, feature_source = _fetch_features_from_feature_store(fetch_features_from_s3, chrom, pos, ref_q, alt_q)
         except FuturesTimeoutError:
             observe_feature_lookup("timeout")
             raise HTTPException(
@@ -474,22 +542,22 @@ def fetch_features(chrom: str, pos: str, ref: Optional[str] = None, alt: Optiona
         
         if df is None or df.empty:
             observe_feature_lookup("not_found")
-            logger.warning(f"Variant not found: chr{chrom}:{pos}")
+            logger.warning(f"Variant not found: chr{chrom}:{pos} {ref_q}>{alt_q}")
             return S3FeaturesResponse(
                 found=False,
                 data=[],
-                message=f"Variant chr{chrom}:{pos} {ref_q}>{alt_q} not found in S3 feature store"
+                message=f"Variant chr{chrom}:{pos} {ref_q}>{alt_q} not found in feature store"
             )
         
         # Convert DataFrame to list of dicts
         features_list = df.to_dict('records')
         observe_feature_lookup("found")
-        logger.info(f"Found {len(features_list)} records for chr{chrom}:{pos} {ref_q}>{alt_q}")
+        logger.info(f"Found {len(features_list)} records for chr{chrom}:{pos} {ref_q}>{alt_q} in {feature_source}")
         
         return S3FeaturesResponse(
             found=True,
             data=features_list,
-            message=f"Successfully fetched {len(features_list)} record(s)"
+            message=f"Successfully fetched {len(features_list)} record(s) from {feature_source}"
         )
     
     except HTTPException:
@@ -624,7 +692,7 @@ def vcf_batch_predict(request: VCFBatchPredictRequest):
 
         try:
             try:
-                df_store = _fetch_features_with_timeout(fetch_features_from_s3, chrom, pos, ref, alt, timeout_seconds=20)
+                df_store, _feature_source = _fetch_features_from_feature_store(fetch_features_from_s3, chrom, pos, ref, alt)
             except FuturesTimeoutError:
                 observe_feature_lookup("timeout")
                 observe_vcf_batch_records("failed", 1)

@@ -64,6 +64,36 @@ def test_health_and_predict_smoke():
     assert b"genopredict_predictions_total" in metrics_response.body
 
 
+def test_feature_lookup_uses_local_feature_store_fallback(tmp_path):
+    feature_path = tmp_path / "features.parquet"
+    pd.DataFrame(
+        [
+            {
+                "#chr": "11",
+                "pos(1-based)": 209271,
+                "ref": "C",
+                "alt": "A",
+                "SIFT_score": 0.1,
+                "Polyphen2_HDIV_score": 0.2,
+                "CADD_phred": 23.0,
+                "gnomAD_exomes_AF": 0.0001,
+            }
+        ]
+    ).to_parquet(feature_path)
+
+    with patch.dict(os.environ, {"GENOPREDICT_FEATURE_STORE_PATH": str(feature_path)}):
+        api = load_api_module()
+        with patch("src.ui.scripts.bridge.fetch_features_from_s3", return_value=pd.DataFrame()):
+            response = api.fetch_features("11", "209271", "C", "A")
+
+    assert response.found is True
+    row = response.data[0]
+    assert row["pos(1-based)"] == 209271
+    payload = api._variant_to_predict_payload(row, "11", "209271", "C", "A")
+    assert payload["polyphen"] == 0.2
+    assert payload["cadd"] == 23.0
+
+
 def test_vcf_upload_and_batch_predict_smoke():
     api = load_api_module()
 
