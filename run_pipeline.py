@@ -95,7 +95,7 @@ def pull_data(cm: ConfigManager, force: bool = False):
 
     try:
         logger.info("📡 Synchronisation des données depuis S3 via DVC...")
-        execute_command(["dvc", "pull", "-f"])
+        execute_command([sys.executable, "-m", "dvc", "pull", "-f"])
     except FileNotFoundError as exc:
         raise RuntimeError("DVC is not installed. Install requirements with dvc-s3 support.") from exc
     except RuntimeError:
