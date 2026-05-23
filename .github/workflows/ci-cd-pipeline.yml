@@ -61,3 +61,6 @@ jobs:
 
       - name: Build compose images
         run: docker compose build
+
+      - name: Render Kubernetes manifests
+        run: kubectl kustomize deploy/k8s/base >/tmp/genopredict-k8s.yaml

@@ -1,0 +1,49 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: genopredict
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 25m
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: genopredict.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  name: http
+    - host: mlflow.genopredict.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mlflow
+                port:
+                  name: http
+    - host: prometheus.genopredict.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus
+                port:
+                  name: http
+    - host: grafana.genopredict.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  name: http

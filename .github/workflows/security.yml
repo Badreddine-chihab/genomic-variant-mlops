@@ -1,0 +1,126 @@
+name: DevSecOps Security Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  security:
+    name: Static, Dependency, Secret, and Image Scans
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      security-events: write
+
+    env:
+      API_IMAGE: genopredict-api:local
+      MLFLOW_IMAGE: genopredict-mlflow:local
+      FRONTEND_IMAGE: genopredict-frontend:local
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install security tooling
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install bandit pip-audit
+
+      - name: Bandit Python SAST
+        run: bandit -r src -ll
+
+      - name: Python dependency audit
+        run: pip-audit -r requirements.txt --no-deps --progress-spinner off
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend dependency audit
+        working-directory: frontend
+        run: npm audit --audit-level=high
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-filesystem.sarif
+          exit-code: "0"
+
+      - name: Upload Trivy filesystem SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-filesystem.sarif
+          category: trivy-filesystem
+
+      - name: Build Docker images
+        run: docker compose build
+
+      - name: Trivy API image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.API_IMAGE }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-api-image.sarif
+          exit-code: "0"
+
+      - name: Upload Trivy API image SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-api-image.sarif
+          category: trivy-api-image
+
+      - name: Trivy MLflow image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.MLFLOW_IMAGE }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-mlflow-image.sarif
+          exit-code: "0"
+
+      - name: Upload Trivy MLflow image SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-mlflow-image.sarif
+          category: trivy-mlflow-image
+
+      - name: Trivy frontend image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.FRONTEND_IMAGE }}
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-frontend-image.sarif
+          exit-code: "0"
+
+      - name: Upload Trivy frontend image SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-frontend-image.sarif
+          category: trivy-frontend-image

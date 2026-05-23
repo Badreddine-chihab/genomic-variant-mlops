@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: genopredict
+  namespace: argocd
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: api=ghcr.io/badreddine-chihab/genopredict-api,frontend=ghcr.io/badreddine-chihab/genopredict-frontend,mlflow=ghcr.io/badreddine-chihab/genopredict-mlflow
+    argocd-image-updater.argoproj.io/api.update-strategy: latest
+    argocd-image-updater.argoproj.io/frontend.update-strategy: latest
+    argocd-image-updater.argoproj.io/mlflow.update-strategy: latest
+    argocd-image-updater.argoproj.io/write-back-method: git
+    argocd-image-updater.argoproj.io/git-branch: main
+    argocd-image-updater.argoproj.io/api.kustomize.image-name: genopredict-api
+    argocd-image-updater.argoproj.io/frontend.kustomize.image-name: genopredict-frontend
+    argocd-image-updater.argoproj.io/mlflow.kustomize.image-name: genopredict-mlflow
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Badreddine-chihab/genomic-variant-mlops.git
+    targetRevision: main
+    path: deploy/k8s/base
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: genopredict
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

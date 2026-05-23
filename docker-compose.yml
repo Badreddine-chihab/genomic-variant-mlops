@@ -1,5 +1,6 @@
-*services:
+services:
   mlflow:
+    image: genopredict-mlflow:local
     build:
       context: .
       dockerfile: Dockerfile.mlflow
@@ -15,10 +16,13 @@
       timeout: 3s
       retries: 30
       start_period: 10s
+    security_opt:
+      - no-new-privileges:true
     networks:
       - mlops_network
 
   api:
+    image: genopredict-api:local
     build:
       context: .
       dockerfile: Dockerfile
@@ -28,6 +32,7 @@
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - GENOPREDICT_MONITORING_LOG=/app/data/monitoring/predictions.jsonl
+      - GENOPREDICT_FEATURE_STORE_PATH=/app/data/processed/model_ready_dataset.parquet
     depends_on:
       mlflow:
         condition: service_healthy
@@ -36,10 +41,22 @@
       - ./data/processed:/app/data/processed:ro
       - ./data/monitoring:/app/data/monitoring
       - ./reports/monitoring:/app/reports/monitoring
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3).read()\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    user: "${GENOPREDICT_UID:-1000}:${GENOPREDICT_GID:-1000}"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     networks:
       - mlops_network
 
   frontend:
+    image: genopredict-frontend:local
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -48,6 +65,14 @@
       - "3000:3000"
     depends_on:
       - api
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000 >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
     networks:
       - mlops_network
 
@@ -60,7 +85,24 @@
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+      drift-monitor:
+        condition: service_started
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/healthy >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     networks:
       - mlops_network
 
@@ -70,15 +112,71 @@
     ports:
       - "3001:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-change-me-in-.env}
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_SECURITY_COOKIE_SECURE=false
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
-      - prometheus
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - mlops_network
+
+  drift-monitor:
+    image: genopredict-api:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: genopredict-drift-monitor
+    command:
+      - python
+      - -m
+      - src.monitoring.drift_monitor
+      - --reference
+      - /app/data/processed/final_training_dataset.parquet
+      - --report
+      - /app/reports/monitoring/latest_drift_report.html
+      - --summary
+      - /app/reports/monitoring/latest_drift_summary.json
+      - --interval-seconds
+      - "${DRIFT_CHECK_INTERVAL_SECONDS:-300}"
+    ports:
+      - "8001:8001"
+    environment:
+      - GENOPREDICT_MONITORING_LOG=/app/data/monitoring/predictions.jsonl
+    volumes:
+      - ./data/processed:/app/data/processed:ro
+      - ./data/monitoring:/app/data/monitoring:ro
+      - ./reports/monitoring:/app/reports/monitoring
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8001/metrics', timeout=3).read()\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    user: "${GENOPREDICT_UID:-1000}:${GENOPREDICT_GID:-1000}"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     networks:
       - mlops_network
 

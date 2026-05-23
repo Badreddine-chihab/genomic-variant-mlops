@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow
+  labels:
+    app: mlflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlflow
+  template:
+    metadata:
+      labels:
+        app: mlflow
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: mlflow
+          image: genopredict-mlflow
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MLFLOW_ALLOWED_HOSTS
+              value: localhost,localhost:5000,127.0.0.1,127.0.0.1:5000,mlflow,mlflow:5000,mlflow.genopredict.local,mlflow.genopredict.local:80
+          ports:
+            - name: http
+              containerPort: 5000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: mlflow-data
+              mountPath: /mlflow
+      volumes:
+        - name: mlflow-data
+          persistentVolumeClaim:
+            claimName: mlflow-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow
+spec:
+  selector:
+    app: mlflow
+  ports:
+    - name: http
+      port: 5000
+      targetPort: http

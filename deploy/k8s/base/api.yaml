@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    app: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: api
+          image: genopredict-api
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MLFLOW_TRACKING_URI
+              value: http://mlflow:5000
+            - name: GENOPREDICT_MONITORING_LOG
+              value: /app/data/monitoring/predictions.jsonl
+            - name: GENOPREDICT_FEATURE_STORE_PATH
+              value: /app/data/processed/model_ready_dataset.parquet
+          ports:
+            - name: http
+              containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 25
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 40
+            periodSeconds: 20
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: mlflow-data
+              mountPath: /mlflow
+              readOnly: true
+            - name: processed-data
+              mountPath: /app/data/processed
+              readOnly: true
+            - name: monitoring-data
+              mountPath: /app/data/monitoring
+            - name: monitoring-reports
+              mountPath: /app/reports/monitoring
+      volumes:
+        - name: mlflow-data
+          persistentVolumeClaim:
+            claimName: mlflow-data
+        - name: processed-data
+          persistentVolumeClaim:
+            claimName: processed-data
+        - name: monitoring-data
+          persistentVolumeClaim:
+            claimName: monitoring-data
+        - name: monitoring-reports
+          persistentVolumeClaim:
+            claimName: monitoring-reports
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+spec:
+  selector:
+    app: api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

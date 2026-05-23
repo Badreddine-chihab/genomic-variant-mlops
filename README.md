@@ -1,5 +1,8 @@
 # Genomic Variant MLOps
 
+[![Docker Compose CI/CD](https://github.com/Badreddine-chihab/genomic-variant-mlops/actions/workflows/ci-cd-pipeline.yml/badge.svg)](https://github.com/Badreddine-chihab/genomic-variant-mlops/actions/workflows/ci-cd-pipeline.yml)
+[![DevSecOps Security Checks](https://github.com/Badreddine-chihab/genomic-variant-mlops/actions/workflows/security.yml/badge.svg)](https://github.com/Badreddine-chihab/genomic-variant-mlops/actions/workflows/security.yml)
+
 Clinical-oriented genomic variant pathogenicity project with:
 
 - XGBoost model training and evaluation
@@ -9,6 +12,7 @@ Clinical-oriented genomic variant pathogenicity project with:
 - VCF upload and batch prediction workflow
 - Runtime monitoring with Prometheus, Grafana, and prediction event logs
 - Evidently-compatible drift report generation
+- SHAP explainability artifacts in the frontend
 
 ## Current App Stack
 
@@ -45,7 +49,47 @@ Services:
 - API: `http://localhost:8000`
 - MLflow: `http://localhost:5000`
 - Prometheus: `http://localhost:9090`
-- Grafana: `http://localhost:3001` (`admin` / `admin`)
+- Grafana: `http://localhost:3001`
+- Drift monitor metrics: `http://localhost:8001/metrics`
+
+Copy `.env.example` to `.env` before exposing the stack outside your laptop,
+then change `GRAFANA_ADMIN_PASSWORD`. The Compose stack also applies basic
+container hardening (`no-new-privileges`, dropped Linux capabilities where
+safe, non-root API/drift users, and health checks).
+
+## AWS Deployment
+
+For the low-budget AWS version, deploy one EC2 `t3.small` instance and run this same Docker
+Compose stack. Do not use EKS for the budget demo.
+
+Start deployment:
+
+`bash deploy/aws/deploy_ec2_compose.sh`
+
+Stop the EC2 instance automatically when it is idle:
+
+`ALERT_EMAIL=you@example.com bash deploy/aws/create_idle_shutdown_alarm.sh`
+
+Destroy it after the demo:
+
+`bash deploy/aws/destroy_ec2_compose.sh`
+
+See `docs/AWS_DEPLOYMENT.md` for IAM permissions, cost guardrails, budget
+alerts, idle shutdown, and troubleshooting.
+
+## Argo CD Deployment
+
+Kubernetes manifests are available under `deploy/k8s/base`, with an Argo CD
+application manifest at `deploy/argocd/application.yaml`.
+
+Apply it with:
+
+`kubectl apply -f deploy/argocd/application.yaml`
+
+The `Publish Container Images` workflow pushes the API, frontend, and MLflow
+images to GHCR on `main`; update `deploy/k8s/base/kustomization.yaml` if you
+want Argo CD to deploy a different registry or tag. See
+`docs/ARGOCD_DEPLOYMENT.md` for the PVC and access details.
 
 MLflow state is shared with the project root:
 
@@ -102,6 +146,20 @@ The report is written to:
 
 `reports/monitoring/latest_drift_report.html`
 
+Docker Compose also runs a continuous drift monitor. It updates:
+
+- `reports/monitoring/latest_drift_report.html`
+- `reports/monitoring/latest_drift_summary.json`
+- Prometheus metrics such as `genopredict_data_drift_score`
+
+Drift summary endpoint:
+
+- `GET /api/monitoring/drift`
+
+Run one drift check locally:
+
+`python -m src.monitoring.drift_monitor --once`
+
 ## CI/CD
 
 The GitHub Actions workflow is Docker Compose-only:
@@ -111,6 +169,36 @@ The GitHub Actions workflow is Docker Compose-only:
 - builds the React frontend
 - validates `docker-compose.yml`
 - builds all Compose images
+
+The separate DevSecOps workflow adds:
+
+- Bandit Python SAST
+- `pip-audit` for Python dependencies
+- `npm audit` for frontend dependencies
+- Trivy filesystem, secret, Compose/Dockerfile, and image scans
+- Trivy SARIF upload to GitHub code scanning for Security tab visibility
+- Dependabot update PRs for Python, npm, Docker, and GitHub Actions
+
+## Demo Flow
+
+1. Start the stack:
+   `docker compose up --build`
+2. Open the UI:
+   `http://localhost:3000`
+3. On Predict, try the default benign feature-store variant:
+   `11:209271 C>A`
+4. For a manual pathogenic example, use:
+   `17:43071077 C>T`, `SIFT=0.01`, `PolyPhen=0.98`, `CADD=35`, `ALT_FREQ=0.00001`
+5. On VCF Lab, click **Load Demo Batch**, then **Run Batch Prediction**.
+   The demo batch includes feature-store hits such as:
+   - `11:298524 A>C`
+   - `11:299372 G>A`
+   - `11:299372 G>C`
+   - `11:299391 G>A`
+   - `11:533467 C>G`
+6. Open Monitoring in the frontend to see prediction history, drift score, and feature drift details.
+7. Open Explainability in the frontend to review SHAP plots and the model input feature list.
+8. Open Grafana at `http://localhost:3001` for dashboards and provisioned alerts.
 
 There is no AWS deployment step. For a VPS deployment, copy the repository or pull the branch on the server and run:
 

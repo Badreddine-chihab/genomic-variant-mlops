@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drift-monitor
+  labels:
+    app: drift-monitor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: drift-monitor
+  template:
+    metadata:
+      labels:
+        app: drift-monitor
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: drift-monitor
+          image: genopredict-api
+          imagePullPolicy: IfNotPresent
+          command:
+            - python
+            - -m
+            - src.monitoring.drift_monitor
+            - --reference
+            - /app/data/processed/final_training_dataset.parquet
+            - --report
+            - /app/reports/monitoring/latest_drift_report.html
+            - --summary
+            - /app/reports/monitoring/latest_drift_summary.json
+            - --interval-seconds
+            - "300"
+          env:
+            - name: GENOPREDICT_MONITORING_LOG
+              value: /app/data/monitoring/predictions.jsonl
+          ports:
+            - name: metrics
+              containerPort: 8001
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: metrics
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: processed-data
+              mountPath: /app/data/processed
+              readOnly: true
+            - name: monitoring-data
+              mountPath: /app/data/monitoring
+              readOnly: true
+            - name: monitoring-reports
+              mountPath: /app/reports/monitoring
+      volumes:
+        - name: processed-data
+          persistentVolumeClaim:
+            claimName: processed-data
+        - name: monitoring-data
+          persistentVolumeClaim:
+            claimName: monitoring-data
+        - name: monitoring-reports
+          persistentVolumeClaim:
+            claimName: monitoring-reports
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: drift-monitor
+spec:
+  selector:
+    app: drift-monitor
+  ports:
+    - name: metrics
+      port: 8001
+      targetPort: metrics
