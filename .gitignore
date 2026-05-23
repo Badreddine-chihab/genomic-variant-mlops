@@ -49,6 +49,7 @@ coverage.xml
 *.py.cover
 .hypothesis/
 .pytest_cache/
+.pytest_cache
 cover/
 
 # Translations
@@ -218,11 +219,24 @@ node_modules/
 models/
 mlruns/
 *.db
+
+# Local generated runtime artifacts
+logs/
+output/
+reports/monitoring/*.html
+reports/monitoring/*.json
+data/monitoring/*.jsonl
+deploy/aws/generated/
+
+# Frontend build output
+frontend/dist/
+frontend/node_modules/
 mlflow.db
 
 # Runtime monitoring outputs
 data/monitoring/*.jsonl
 reports/monitoring/*.html
+reports/monitoring/*.json
 
 # OS generated files
 .DS_Store

@@ -55,6 +55,35 @@ body {
   word-break: break-word;
 }
 
+.explainability-plot {
+  display: block;
+  width: 100%;
+  max-height: 560px;
+  object-fit: contain;
+}
+
+.explainability-plot-tall {
+  max-height: 760px;
+}
+
+.feature-chip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.5rem;
+}
+
+.feature-chip {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #d8dee9;
+  border-radius: 8px;
+  display: flex;
+  gap: 0.5rem;
+  min-height: 2.35rem;
+  padding: 0.45rem 0.65rem;
+  word-break: break-word;
+}
+
 @keyframes pageFade {
   from {
     opacity: 0;

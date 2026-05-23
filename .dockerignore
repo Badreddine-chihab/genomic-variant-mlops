@@ -15,14 +15,17 @@ venv/
 .venv/
 notebooks/
 aws/dist/
+deploy/aws/generated/
 data/dbNSFP_extracted/
 data/processed/
 data/raw/
+data/monitoring/
 models/
 logs/
 output/
 reports/figures/
 reports/monitoring/*.html
+reports/monitoring/*.json
 frontend/node_modules/
 frontend/dist/
 frontend/

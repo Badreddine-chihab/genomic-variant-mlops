@@ -30,6 +30,8 @@ Primary user flow:
 - Runtime routing: relative `/api/*` calls
 - Docker proxy: `frontend/nginx.conf` forwards `/api/*` and `/metrics` to `api:8000`
 - Local dev proxy: `frontend/vite.config.js` forwards `/api` and `/metrics` to `localhost:8000`
+- Explainability tab: serves SHAP images from `frontend/public/figures/` and
+  reads the production feature list from `GET /api/model-info`
 
 ### 2.3 Model and MLOps
 
@@ -218,6 +220,16 @@ This is designed for professor-facing demos and quick review of batch results.
 - `frontend`
 - `prometheus`
 - `grafana`
+- `drift-monitor`
+
+Grafana provisions the GenoPredict dashboard and alert rules from
+`monitoring/grafana/provisioning/`. Alerts cover API availability, model load
+status, recent prediction errors, and data drift.
+
+Prometheus scrapes:
+
+- `api:8000/metrics`
+- `drift-monitor:8001/metrics`
 
 Streamlit is removed from compose orchestration.
 
@@ -269,6 +281,13 @@ training runs and promotes the best eligible one.
 - VCF upload requires `python-multipart`
 - MLflow UI is available at `http://localhost:5000`
 - API model state is visible at `GET /api/model-info`
+- Drift state is visible at `GET /api/monitoring/drift`
+- Grafana alerts are available under `http://localhost:3001/alerting`
+- AWS idle shutdown is available with
+  `bash deploy/aws/create_idle_shutdown_alarm.sh`
+- Dependabot is configured for Python, npm, Docker, and GitHub Actions updates
+- Trivy SARIF uploads appear in the GitHub Security/code scanning view after
+  the DevSecOps workflow runs on GitHub
 
 ## 14. Verification
 
@@ -289,6 +308,15 @@ Useful smoke checks:
 `curl -sS "http://localhost:3000/api/fetch-features?chrom=11&pos=209271&ref=C&alt=A"`
 
 `curl -sS -X POST http://localhost:3000/api/predict -H "Content-Type: application/json" --data '{"chrom":"11","pos":"209271","ref":"C","alt":"A","sift":0.781,"polyphen":0.0,"cadd":16.120001,"alt_freq":0.000001}'`
+
+Pathogenic demo variants present in the feature store and included in
+`data/examples/lab_demo_batch.vcf`:
+
+- `11:298524 A>C`
+- `11:299372 G>A`
+- `11:299372 G>C`
+- `11:299391 G>A`
+- `11:533467 C>G`
 
 Expected healthy model status:
 

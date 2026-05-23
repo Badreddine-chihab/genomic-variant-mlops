@@ -3,6 +3,7 @@ import {
   fetchFeatures,
   getHealth,
   getModelInfo,
+  getMonitoringDrift,
   getMonitoringPredictions,
   getMonitoringSummary,
   predictVariant,
@@ -16,9 +17,10 @@ const REVIEW_STATUSES = ["Needs review", "Reviewed", "Flagged", "Exported"];
 const DEMO_BATCH_RECORDS = [
   { chrom: "11", pos: "209271", ref: "C", alt: "A" },
   { chrom: "11", pos: "298524", ref: "A", alt: "C" },
-  { chrom: "11", pos: "298709", ref: "C", alt: "T" },
+  { chrom: "11", pos: "299372", ref: "G", alt: "A" },
   { chrom: "11", pos: "299372", ref: "G", alt: "C" },
-  { chrom: "11", pos: "236094", ref: "A", alt: "G" },
+  { chrom: "11", pos: "299391", ref: "G", alt: "A" },
+  { chrom: "11", pos: "533467", ref: "C", alt: "G" },
   { chrom: "7", pos: "140453136", ref: "A", alt: "T" }
 ];
 
@@ -546,6 +548,79 @@ function PageOverview({
   );
 }
 
+function PageExplainability({ modelInfo }) {
+  const features = modelInfo?.input_features || [];
+
+  return (
+    <div className="page-panel">
+      <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+        <div>
+          <h4 className="mb-1">Model Explainability</h4>
+          <p className="text-secondary mb-0">SHAP artifacts and the production model feature contract.</p>
+        </div>
+        <div className="d-flex flex-wrap gap-2">
+          <span className={`badge ${modelInfo?.model_status === "loaded" ? "text-bg-success" : "text-bg-warning"}`}>
+            {modelInfo?.model_status || "unknown"}
+          </span>
+          <span className="badge text-bg-light border">{features.length} features</span>
+        </div>
+      </div>
+
+      <div className="row g-3 mb-3">
+        <div className="col-xl-6">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-header bg-white border-0 py-3">
+              <h5 className="mb-0">SHAP Feature Importance</h5>
+            </div>
+            <div className="card-body">
+              <img
+                className="explainability-plot"
+                src="/figures/shap_bar_plot.png"
+                alt="SHAP bar plot showing global feature importance"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="col-xl-6">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-header bg-white border-0 py-3">
+              <h5 className="mb-0">SHAP Summary</h5>
+            </div>
+            <div className="card-body">
+              <img
+                className="explainability-plot explainability-plot-tall"
+                src="/figures/shap_summary_plot.png"
+                alt="SHAP summary plot showing feature effects across samples"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card shadow-sm border-0">
+        <div className="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+          <h5 className="mb-0">Model Input Features</h5>
+          <span className="badge text-bg-light">{features.length}</span>
+        </div>
+        <div className="card-body">
+          {features.length === 0 ? (
+            <p className="text-secondary mb-0">Feature metadata is not available yet.</p>
+          ) : (
+            <div className="feature-chip-grid">
+              {features.map((feature, idx) => (
+                <span key={feature} className="feature-chip">
+                  <span className="text-secondary">{idx + 1}</span>
+                  {feature}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PagePredict({
   form,
   setForm,
@@ -625,19 +700,51 @@ function PagePredict({
               <div className="row g-2">
                 <div className="col-md-3">
                   <label className="form-label">SIFT</label>
-                  <input className="form-control" value={form.sift} onChange={(e) => setForm((s) => ({ ...s, sift: e.target.value }))} />
+                  <input
+                    className="form-control"
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.001"
+                    value={form.sift}
+                    onChange={(e) => setForm((s) => ({ ...s, sift: e.target.value }))}
+                  />
                 </div>
                 <div className="col-md-3">
                   <label className="form-label">PolyPhen</label>
-                  <input className="form-control" value={form.polyphen} onChange={(e) => setForm((s) => ({ ...s, polyphen: e.target.value }))} />
+                  <input
+                    className="form-control"
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.001"
+                    value={form.polyphen}
+                    onChange={(e) => setForm((s) => ({ ...s, polyphen: e.target.value }))}
+                  />
                 </div>
                 <div className="col-md-3">
                   <label className="form-label">CADD</label>
-                  <input className="form-control" value={form.cadd} onChange={(e) => setForm((s) => ({ ...s, cadd: e.target.value }))} />
+                  <input
+                    className="form-control"
+                    type="number"
+                    min="0"
+                    max="60"
+                    step="0.1"
+                    value={form.cadd}
+                    onChange={(e) => setForm((s) => ({ ...s, cadd: e.target.value }))}
+                  />
                 </div>
                 <div className="col-md-3">
                   <label className="form-label">ALT Freq</label>
-                  <input className="form-control" value={form.alt_freq} onChange={(e) => setForm((s) => ({ ...s, alt_freq: e.target.value }))} />
+                  <input
+                    className="form-control"
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.000001"
+                    value={form.alt_freq}
+                    onChange={(e) => setForm((s) => ({ ...s, alt_freq: e.target.value }))}
+                  />
                 </div>
               </div>
 
@@ -1039,11 +1146,20 @@ function formatNumber(value, digits = 1) {
   return Number(value).toFixed(digits);
 }
 
-function PageMonitoring({ summary, events, loading, onRefresh }) {
+function PageMonitoring({ summary, drift, events, loading, onRefresh }) {
   const latestEvents = events?.items || [];
   const grafanaUrl = `${window.location.protocol}//${window.location.hostname}:3001`;
   const prometheusUrl = `${window.location.protocol}//${window.location.hostname}:9090`;
   const metricsUrl = `${window.location.origin}/metrics`;
+  const driftFeatures = drift?.features || [];
+  const driftScore = typeof drift?.drift_score === "number" ? drift.drift_score : null;
+  const driftStatusClass = driftScore === null
+    ? "text-bg-secondary"
+    : driftScore > 0.5
+      ? "text-bg-danger"
+      : driftScore > 0
+        ? "text-bg-warning"
+        : "text-bg-success";
 
   return (
     <div className="page-panel">
@@ -1093,6 +1209,42 @@ function PageMonitoring({ summary, events, loading, onRefresh }) {
       </div>
 
       <div className="row g-3 mb-3">
+        <div className="col-xl-3 col-md-6">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body">
+              <h6 className="text-secondary">Drift Score</h6>
+              <h2 className="mb-2">{formatPercent(driftScore)}</h2>
+              <span className={`badge ${driftStatusClass}`}>{drift?.status || "not_available"}</span>
+            </div>
+          </div>
+        </div>
+        <div className="col-xl-3 col-md-6">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body">
+              <h6 className="text-secondary">Current Rows</h6>
+              <h2 className="mb-0">{drift?.current_rows ?? 0}</h2>
+            </div>
+          </div>
+        </div>
+        <div className="col-xl-3 col-md-6">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body">
+              <h6 className="text-secondary">Reference Rows</h6>
+              <h2 className="mb-0">{drift?.reference_rows ?? "N/A"}</h2>
+            </div>
+          </div>
+        </div>
+        <div className="col-xl-3 col-md-6">
+          <div className="card shadow-sm border-0 h-100">
+            <div className="card-body">
+              <h6 className="text-secondary">Drifted Features</h6>
+              <h2 className="mb-0">{drift?.drifted_features ?? 0}/{drift?.monitored_features ?? 0}</h2>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="row g-3 mb-3">
         <div className="col-xl-4">
           <div className="card shadow-sm border-0 h-100">
             <div className="card-header bg-white border-0 py-3">
@@ -1136,6 +1288,49 @@ function PageMonitoring({ summary, events, loading, onRefresh }) {
               <a className="btn btn-outline-dark" href={metricsUrl} target="_blank" rel="noreferrer">View Raw Metrics</a>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="card shadow-sm border-0 mb-3">
+        <div className="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+          <h5 className="mb-0">Feature Drift</h5>
+          <span className="badge text-bg-light">{drift?.checked_at ? new Date(drift.checked_at).toLocaleString() : "pending"}</span>
+        </div>
+        <div className="table-responsive">
+          <table className="table table-striped table-hover mb-0 align-middle">
+            <thead className="table-light">
+              <tr>
+                <th>Feature</th>
+                <th>Status</th>
+                <th>Reference Mean</th>
+                <th>Current Mean</th>
+                <th>Delta</th>
+                <th>Threshold</th>
+              </tr>
+            </thead>
+            <tbody>
+              {driftFeatures.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="text-center text-secondary py-4">{drift?.message || "No drift summary yet."}</td>
+                </tr>
+              ) : (
+                driftFeatures.map((row) => (
+                  <tr key={row.feature}>
+                    <td>{row.feature}</td>
+                    <td>
+                      <span className={`badge ${row.drifted ? "text-bg-danger" : "text-bg-success"}`}>
+                        {row.drifted ? "Drifted" : "Stable"}
+                      </span>
+                    </td>
+                    <td>{formatNumber(row.reference_mean, 4)}</td>
+                    <td>{formatNumber(row.current_mean, 4)}</td>
+                    <td>{formatNumber(row.mean_delta, 4)}</td>
+                    <td>{formatNumber(row.threshold, 4)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -1199,6 +1394,7 @@ export default function App() {
   const [predictLoading, setPredictLoading] = useState(false);
   const [monitoringLoading, setMonitoringLoading] = useState(false);
   const [monitoringSummary, setMonitoringSummary] = useState(null);
+  const [monitoringDrift, setMonitoringDrift] = useState(null);
   const [monitoringEvents, setMonitoringEvents] = useState({ items: [] });
   const [fetchedRow, setFetchedRow] = useState(null);
   const [lastPrediction, setLastPrediction] = useState(null);
@@ -1234,11 +1430,13 @@ export default function App() {
   const loadMonitoring = async () => {
     setMonitoringLoading(true);
     try {
-      const [summaryRes, eventsRes] = await Promise.all([
+      const [summaryRes, driftRes, eventsRes] = await Promise.all([
         getMonitoringSummary(),
+        getMonitoringDrift(),
         getMonitoringPredictions(50)
       ]);
       setMonitoringSummary(summaryRes);
+      setMonitoringDrift(driftRes);
       setMonitoringEvents(eventsRes);
     } catch (e) {
       setAppError(e.message);
@@ -1416,7 +1614,8 @@ export default function App() {
     ["overview", "Overview"],
     ["predict", "Predict"],
     ["vcf", "VCF Lab"],
-    ["monitoring", "Monitoring"]
+    ["monitoring", "Monitoring"],
+    ["explainability", "Explainability"]
   ];
 
   return (
@@ -1488,11 +1687,13 @@ export default function App() {
         {page === "monitoring" && (
           <PageMonitoring
             summary={monitoringSummary}
+            drift={monitoringDrift}
             events={monitoringEvents}
             loading={monitoringLoading}
             onRefresh={loadMonitoring}
           />
         )}
+        {page === "explainability" && <PageExplainability modelInfo={modelInfo} />}
       </div>
     </div>
   );

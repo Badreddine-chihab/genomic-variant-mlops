@@ -53,7 +53,7 @@ jobs:
         run: npm audit --audit-level=high
 
       - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -75,7 +75,7 @@ jobs:
         run: docker compose build
 
       - name: Trivy API image scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.API_IMAGE }}
           severity: CRITICAL,HIGH
@@ -92,7 +92,7 @@ jobs:
           category: trivy-api-image
 
       - name: Trivy MLflow image scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.MLFLOW_IMAGE }}
           severity: CRITICAL,HIGH
@@ -109,7 +109,7 @@ jobs:
           category: trivy-mlflow-image
 
       - name: Trivy frontend image scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.FRONTEND_IMAGE }}
           severity: CRITICAL,HIGH

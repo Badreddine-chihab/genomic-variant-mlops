@@ -11,10 +11,26 @@ async function parseResponse(response) {
   }
 
   if (!response.ok) {
-    const detail = payload?.detail || payload?.message || `HTTP ${response.status}`;
+    const detail = formatApiError(payload?.detail || payload?.message || `HTTP ${response.status}`);
     throw new Error(detail);
   }
   return payload;
+}
+
+function formatApiError(detail) {
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (!item || typeof item !== "object") return String(item);
+        const field = Array.isArray(item.loc) ? item.loc.filter((part) => part !== "body").join(".") : "";
+        return field ? `${field}: ${item.msg}` : item.msg || JSON.stringify(item);
+      })
+      .join("; ");
+  }
+  if (detail && typeof detail === "object") {
+    return detail.message || detail.msg || JSON.stringify(detail);
+  }
+  return String(detail);
 }
 
 export async function getHealth() {
@@ -34,6 +50,11 @@ export async function getMonitoringSummary() {
 
 export async function getMonitoringPredictions(limit = 25) {
   const response = await fetch(`${API_BASE}/api/monitoring/predictions?limit=${encodeURIComponent(limit)}`);
+  return parseResponse(response);
+}
+
+export async function getMonitoringDrift() {
+  const response = await fetch(`${API_BASE}/api/monitoring/drift`);
   return parseResponse(response);
 }
 

@@ -1,4 +1,6 @@
 import json
+import logging
+import math
 import os
 import threading
 from datetime import datetime, timezone
@@ -10,6 +12,7 @@ import pandas as pd
 
 DEFAULT_LOG_PATH = Path("data/monitoring/predictions.jsonl")
 _LOCK = threading.Lock()
+LOGGER = logging.getLogger(__name__)
 
 
 def get_log_path() -> Path:
@@ -20,27 +23,36 @@ def _json_safe(value: Any) -> Any:
     if value is None:
         return None
     if hasattr(value, "item"):
-        return value.item()
-    if isinstance(value, (str, int, float, bool)):
+        value = value.item()
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, (str, int, bool)):
         return value
     if isinstance(value, datetime):
         return value.isoformat()
     return str(value)
 
 
+def _sanitize_event(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {key: _json_safe(value) for key, value in row.items()}
+
+
 def log_prediction_event(event: Dict[str, Any]) -> None:
     """Append one prediction monitoring event to the local JSONL event store."""
     path = get_log_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
 
     payload = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         **{key: _json_safe(value) for key, value in event.items()},
     }
 
-    with _LOCK:
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, sort_keys=True) + "\n")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with _LOCK:
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(payload, sort_keys=True) + "\n")
+    except OSError as error:
+        LOGGER.warning("Prediction monitoring event could not be written to %s: %s", path, error)
 
 
 def load_prediction_events(limit: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -55,7 +67,7 @@ def load_prediction_events(limit: Optional[int] = None) -> List[Dict[str, Any]]:
             if not line:
                 continue
             try:
-                rows.append(json.loads(line))
+                rows.append(_sanitize_event(json.loads(line)))
             except json.JSONDecodeError:
                 continue
 

@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1480" height="560" viewBox="0 0 1480 560" role="img" aria-labelledby="title desc">
+  <title id="title">VCF Batch Workflow</title>
+  <desc id="desc">VCF records are normalized, enriched, predicted, summarized, and exported.</desc>
+  <defs>
+    <style>
+      .page { fill: #f5f7fb; }
+      .panel { fill: #ffffff; stroke: #d8dee8; stroke-width: 1.4; }
+      .title { font: 700 32px Arial, Helvetica, sans-serif; fill: #172033; }
+      .subtitle { font: 400 16px Arial, Helvetica, sans-serif; fill: #657083; }
+      .section { font: 700 15px Arial, Helvetica, sans-serif; fill: #172033; }
+      .label { font: 700 11px Arial, Helvetica, sans-serif; fill: #ffffff; letter-spacing: .7px; }
+      .box-title { font: 700 16px Arial, Helvetica, sans-serif; fill: #172033; }
+      .body { font: 400 13px Arial, Helvetica, sans-serif; fill: #465366; }
+      .caption { font: 600 12px Arial, Helvetica, sans-serif; fill: #657083; }
+      .mono { font: 600 12px Consolas, Menlo, monospace; fill: #465366; }
+      .arrow { stroke: #657083; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .arrow-soft { stroke: #98a2b3; stroke-width: 2; fill: none; stroke-dasharray: 7 7; marker-end: url(#arrow-soft); }
+    </style>
+    <marker id="arrow" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M1 1 L9 5.5 L1 10 Z" fill="#657083"/>
+    </marker>
+    <marker id="arrow-soft" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M1 1 L9 5.5 L1 10 Z" fill="#98a2b3"/>
+    </marker>
+  </defs>
+  <rect class="page" width="100%" height="100%"/>
+  <rect class="panel" x="32" y="28" width="1416" height="504" rx="8"/>
+  <text class="title" x="68" y="80">VCF Batch Workflow</text>
+  <text class="subtitle" x="68" y="108">VCF records are normalized, enriched, predicted, summarized, and exported.</text>
+  <g>
+    <rect x="74" y="205" width="237" height="148" rx="8" fill="#fffbeb" stroke="#d8dee8" stroke-width="1.4"/>
+    <rect x="74" y="205" width="237" height="29" rx="8" fill="#b45309"/>
+    <path d="M74 226 H311 V234 H74 Z" fill="#b45309"/>
+    <text class="label" x="90" y="225">UPLOAD</text>
+    <text class="box-title" x="92" y="263">VCF upload</text>
+    <text class="body" x="92" y="289">Header-safe parsing</text>
+    <text class="body" x="92" y="308">Record preview</text>
+  </g>
+  <g>
+    <rect x="347" y="205" width="237" height="148" rx="8" fill="#f0fdfa" stroke="#d8dee8" stroke-width="1.4"/>
+    <rect x="347" y="205" width="237" height="29" rx="8" fill="#0f766e"/>
+    <path d="M347 226 H584 V234 H347 Z" fill="#0f766e"/>
+    <text class="label" x="363" y="225">NORMALIZE</text>
+    <text class="box-title" x="365" y="263">ALT splitting</text>
+    <text class="body" x="365" y="289">One row per allele</text>
+    <text class="body" x="365" y="308">Variant identifiers</text>
+  </g>
+  <g>
+    <rect x="620" y="205" width="237" height="148" rx="8" fill="#f0fdf4" stroke="#d8dee8" stroke-width="1.4"/>
+    <rect x="620" y="205" width="237" height="29" rx="8" fill="#15803d"/>
+    <path d="M620 226 H857 V234 H620 Z" fill="#15803d"/>
+    <text class="label" x="636" y="225">LOOKUP</text>
+    <text class="box-title" x="638" y="263">Feature lookup</text>
+    <text class="body" x="638" y="289">Parquet first</text>
+    <text class="body" x="638" y="308">S3 timeout guard</text>
+  </g>
+  <g>
+    <rect x="893" y="205" width="237" height="148" rx="8" fill="#eff6ff" stroke="#d8dee8" stroke-width="1.4"/>
+    <rect x="893" y="205" width="237" height="29" rx="8" fill="#2563eb"/>
+    <path d="M893 226 H1130 V234 H893 Z" fill="#2563eb"/>
+    <text class="label" x="909" y="225">PREDICT</text>
+    <text class="box-title" x="911" y="263">Batch predict</text>
+    <text class="body" x="911" y="289">Found/not found/failed</text>
+    <text class="body" x="911" y="308">Max records guard</text>
+  </g>
+  <g>
+    <rect x="1166" y="205" width="237" height="148" rx="8" fill="#f5f3ff" stroke="#d8dee8" stroke-width="1.4"/>
+    <rect x="1166" y="205" width="237" height="29" rx="8" fill="#6d28d9"/>
+    <path d="M1166 226 H1403 V234 H1166 Z" fill="#6d28d9"/>
+    <text class="label" x="1182" y="225">EXPORT</text>
+    <text class="box-title" x="1184" y="263">CSV report</text>
+    <text class="body" x="1184" y="289">Counters</text>
+    <text class="body" x="1184" y="308">Reviewable results</text>
+  </g>
+  <path class="arrow" d="M311 279 L347 279"/>
+  <path class="arrow" d="M584 279 L620 279"/>
+  <path class="arrow" d="M857 279 L893 279"/>
+  <path class="arrow" d="M1130 279 L1166 279"/>
+  <text class="mono" x="74" y="490">Endpoints: POST /api/upload-vcf and POST /api/vcf-batch-predict.</text>
+</svg>

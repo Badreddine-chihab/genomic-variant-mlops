@@ -4,7 +4,8 @@
 #CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
 11	209271	.	C	A	.	PASS	DEMO=benign_reference
 11	298524	.	A	C	.	PASS	DEMO=pathogenic_candidate
-11	298709	.	C	T	.	PASS	DEMO=pathogenic_candidate
+11	299372	.	G	A	.	PASS	DEMO=pathogenic_candidate
 11	299372	.	G	C	.	PASS	DEMO=pathogenic_candidate
-11	236094	.	A	G	.	PASS	DEMO=benign_reference
+11	299391	.	G	A	.	PASS	DEMO=pathogenic_candidate
+11	533467	.	C	G	.	PASS	DEMO=pathogenic_candidate
 7	140453136	.	A	T	.	PASS	DEMO=not_found_example

@@ -2,6 +2,7 @@ import sys
 import os
 import logging
 import importlib.util
+import json
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
@@ -22,6 +23,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.orchestration.config_utils import ConfigManager
 from src.features.schema_contract import FEATURE_ORDER, enforce_feature_contract
+from src.features.encode_features import CHR_LENGTHS, TRANSITIONS, TRANVERSIONS
 from src.monitoring.prediction_logger import (
     load_prediction_events,
     log_prediction_event,
@@ -43,6 +45,12 @@ LOCAL_FEATURE_STORE_PATH = Path(
     os.getenv(
         "GENOPREDICT_FEATURE_STORE_PATH",
         PROJECT_ROOT / "data" / "processed" / "model_ready_dataset.parquet",
+    )
+)
+DRIFT_SUMMARY_PATH = Path(
+    os.getenv(
+        "GENOPREDICT_DRIFT_SUMMARY_PATH",
+        PROJECT_ROOT / "reports" / "monitoring" / "latest_drift_summary.json",
     )
 )
 _LOCAL_FEATURE_CACHE: Dict[str, Any] = {"path": None, "mtime": None, "df": None}
@@ -265,6 +273,86 @@ def _variant_to_predict_payload(row: Dict[str, Any], chrom: str, pos: str, ref: 
     return payload
 
 
+def _build_model_features(payload: Dict[str, Any]) -> Dict[str, Any]:
+    def _num(default: float, *keys: str) -> float:
+        for key in keys:
+            value = payload.get(key)
+            if value is None or value == "":
+                continue
+            try:
+                return float(value)
+            except Exception:
+                continue
+        return default
+
+    chrom = _normalize_chrom(payload.get("chrom", payload.get("CHROM", "1")))
+    pos = _num(0.0, "pos", "POS", "pos(1-based)")
+    ref = str(payload.get("ref", payload.get("REF", "N")) or "N").upper()
+    alt = str(payload.get("alt", payload.get("ALT", "N")) or "N").upper()
+    sift = _num(-1.0, "sift", "SIFT", "SIFT_score")
+    polyphen = _num(-1.0, "polyphen", "PolyPhen", "Polyphen2_HVAR_score", "Polyphen2_HDIV_score")
+    cadd = _num(-1.0, "cadd", "CADD", "CADD_phred")
+    alt_freq = _num(0.0, "alt_freq", "ALT_FREQ", "gnomAD_exomes_AF")
+
+    ref_base = ref[:1] or "N"
+    alt_base_raw = alt[:1] or "N"
+    is_indel = int(len(ref) != len(alt))
+    delta_length = len(alt) - len(ref)
+    indel_size = abs(delta_length)
+    is_frameshift = int(is_indel == 1 and indel_size % 3 != 0)
+    alt_base = "-" if is_indel else alt_base_raw
+    mutation_type = "INDEL" if is_indel else f"{ref_base}_{alt_base}"
+    rare_variant = int(alt_freq < 0.005)
+    is_ultra_rare = int(alt_freq < 0.001)
+    is_large_indel = int(indel_size > 5)
+    cadd_high = int(cadd > 20)
+    cadd_very_high = int(cadd > 30)
+    sift_damaging = int(sift >= 0 and sift < 0.05)
+    polyphen_damaging = int(polyphen > 0.85)
+    impact_score = (
+        is_frameshift * 3.0
+        + is_large_indel * 2.0
+        + indel_size * 0.1
+        + is_ultra_rare * 2.0
+        + cadd_high * 2.0
+    )
+    chr_length = float(CHR_LENGTHS.get(chrom, CHR_LENGTHS["1"]))
+    normalized_pos = max(0.0, min(1.0, pos / chr_length if chr_length else 0.0))
+
+    return {
+        "CHROM": chrom,
+        "SIFT": sift,
+        "PolyPhen": polyphen,
+        "CADD": cadd,
+        "ALT_FREQ": alt_freq,
+        "Is_InDel": is_indel,
+        "Delta_Length": delta_length,
+        "indel_size": indel_size,
+        "Is_Frameshift": is_frameshift,
+        "REF_Base": ref_base,
+        "ALT_Base": alt_base,
+        "mutation_type": mutation_type,
+        "freq_log": float(np.log1p(alt_freq)),
+        "rare_variant": rare_variant,
+        "is_ultra_rare": is_ultra_rare,
+        "is_large_indel": is_large_indel,
+        "CADD_high": cadd_high,
+        "CADD_very_high": cadd_very_high,
+        "SIFT_damaging": sift_damaging,
+        "PolyPhen_damaging": polyphen_damaging,
+        "CADD_x_rare": cadd * rare_variant,
+        "Impact_Score": impact_score,
+        "rare_impact": rare_variant * impact_score,
+        "normalized_pos": normalized_pos,
+        "pos_bin": int(max(0, min(9, np.floor(normalized_pos * 10)))),
+        "pos_freq_interaction": normalized_pos * alt_freq,
+        "is_transition": int(mutation_type in TRANSITIONS),
+        "is_transversion": int(mutation_type in TRANVERSIONS),
+        "chrom_freq_mean": 0.0,
+        "chrom_rare_rate": 0.0,
+    }
+
+
 def _fetch_features_with_timeout(fetch_fn, chrom: str, pos: str, ref: str, alt: str, timeout_seconds: int = 20):
     with ThreadPoolExecutor(max_workers=1) as executor:
         future = executor.submit(fetch_fn, chrom, pos, ref, alt)
@@ -405,7 +493,7 @@ def predict(data: dict):
     start = time.perf_counter()
     try:
         # 1. Conversion en DataFrame
-        df = pd.DataFrame([data])
+        df = pd.DataFrame([_build_model_features(data)])
         
         df = enforce_feature_contract(df, fill_missing=True)
         
@@ -458,7 +546,7 @@ def predict_enhanced(variant: VariantInput):
     data: Dict[str, Any] = variant.model_dump(exclude_none=True)
     try:
         # Convert to DataFrame
-        df = pd.DataFrame([data])
+        df = pd.DataFrame([_build_model_features(data)])
         
         df = enforce_feature_contract(df, fill_missing=True)
         
@@ -738,7 +826,7 @@ def vcf_batch_predict(request: VCFBatchPredictRequest):
             row = df_store.iloc[0].to_dict()
             payload = _variant_to_predict_payload(row, chrom, pos, ref, alt)
             payload_for_monitoring.update(payload)
-            df_pred = enforce_feature_contract(pd.DataFrame([payload]), fill_missing=True)
+            df_pred = enforce_feature_contract(pd.DataFrame([_build_model_features(payload)]), fill_missing=True)
             prediction, probability, confidence = _predict_with_probability(df_pred)
             observe_vcf_batch_records("predicted", 1)
             predicted += 1
@@ -825,6 +913,21 @@ def monitoring_summary():
 def monitoring_predictions(limit: int = 100):
     limit = max(1, min(1000, int(limit)))
     return {"items": load_prediction_events(limit=limit), "limit": limit}
+
+
+@app.get("/api/monitoring/drift")
+def monitoring_drift():
+    if not DRIFT_SUMMARY_PATH.exists():
+        return {
+            "status": "not_available",
+            "message": "No drift summary has been generated yet.",
+            "summary_path": str(DRIFT_SUMMARY_PATH),
+        }
+
+    try:
+        return json.loads(DRIFT_SUMMARY_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise HTTPException(status_code=500, detail=f"Drift summary is not valid JSON: {error}")
 
 
 @app.get("/api/model-info")

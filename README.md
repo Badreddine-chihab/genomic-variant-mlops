@@ -23,6 +23,23 @@ Clinical-oriented genomic variant pathogenicity project with:
 
 Streamlit is kept in repository for reference only and is no longer the primary UI.
 
+## Architecture
+
+The project documentation includes a refreshed, generated SVG diagram set:
+
+- [End-to-end MLOps workflow](docs/project_workflow.svg)
+- [Data pipeline](docs/data_pipeline.svg)
+- [Training and governance](docs/training_pipeline.svg)
+- [Online inference](docs/inference_workflow.svg)
+- [VCF batch workflow](docs/vcf_workflow.svg)
+- [Monitoring and drift](docs/monitoring_workflow.svg)
+- [CI/CD and security](docs/cicd_security_workflow.svg)
+- [Deployment workflow](docs/deployment_workflow.svg)
+
+Regenerate them with:
+
+`python docs/generate_workflow_svgs.py`
+
 ## Run Locally
 
 1. Install Python deps:
