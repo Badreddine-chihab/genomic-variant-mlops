@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: genopredict-prod
+
+resources:
+  - ../../base
+
+patches:
+  - path: ingress-hosts.yaml
+  - path: production-hardening.yaml
+
+secretGenerator:
+  - name: grafana-admin
+    behavior: replace
+    envs:
+      - secrets/grafana-admin.env.example
+
+generatorOptions:
+  disableNameSuffixHash: true

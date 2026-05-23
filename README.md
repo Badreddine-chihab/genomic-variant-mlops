@@ -38,7 +38,14 @@ The project documentation includes a refreshed, generated SVG diagram set:
 
 Regenerate them with:
 
-`python docs/generate_workflow_svgs.py`
+`make diagrams`
+
+Additional project documentation:
+
+- [Model card](docs/MODEL_CARD.md)
+- [Feature schema](docs/FEATURE_SCHEMA.md)
+- [Argo CD deployment](docs/ARGOCD_DEPLOYMENT.md)
+- [AWS deployment](docs/AWS_DEPLOYMENT.md)
 
 ## Run Locally
 
@@ -98,6 +105,8 @@ alerts, idle shutdown, and troubleshooting.
 
 Kubernetes manifests are available under `deploy/k8s/base`, with an Argo CD
 application manifest at `deploy/argocd/application.yaml`.
+Environment overlays are available under `deploy/k8s/overlays/dev` and
+`deploy/k8s/overlays/prod`.
 
 Apply it with:
 
@@ -236,6 +245,10 @@ Run the full test suite inside the API container:
 Or run lightweight local smoke checks with:
 
 `python -c "from tests.test_api_smoke import test_health_and_predict_smoke, test_vcf_upload_and_batch_predict_smoke; test_health_and_predict_smoke(); test_vcf_upload_and_batch_predict_smoke()"`
+
+For a running API service, use the operational demo check:
+
+`make demo-check`
 
 ## Core Product Logic
 

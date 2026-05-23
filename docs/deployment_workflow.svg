@@ -51,7 +51,7 @@
     <path d="M620 226 H857 V234 H620 Z" fill="#6d28d9"/>
     <text class="label" x="636" y="225">GITOPS</text>
     <text class="box-title" x="638" y="263">Argo CD</text>
-    <text class="body" x="638" y="289">Kustomize manifests</text>
+    <text class="body" x="638" y="289">dev/prod overlays</text>
     <text class="body" x="638" y="308">self-healing sync</text>
   </g>
   <g>
@@ -76,5 +76,5 @@
   <path class="arrow" d="M584 279 L620 279"/>
   <path class="arrow" d="M857 279 L893 279"/>
   <path class="arrow" d="M1130 279 L1166 279"/>
-  <text class="mono" x="74" y="490">Kubernetes manifests: deploy/k8s/base | Argo CD app: deploy/argocd/application.yaml.</text>
+  <text class="mono" x="74" y="490">Kubernetes manifests: deploy/k8s/base and deploy/k8s/overlays/{dev,prod}.</text>
 </svg>

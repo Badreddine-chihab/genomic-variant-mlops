@@ -13,12 +13,12 @@ slides, or the README without looking like unrelated screenshots.
 | [VCF batch workflow](vcf_workflow.svg) | Upload, ALT normalization, feature lookup, batch prediction, and export. |
 | [Monitoring and drift](monitoring_workflow.svg) | Prediction logs, Prometheus, drift checks, Grafana dashboards, and alerts. |
 | [CI/CD and security](cicd_security_workflow.svg) | Tests, image builds, security scans, GHCR publishing, and dependency upkeep. |
-| [Deployment workflow](deployment_workflow.svg) | Local Compose, GitOps Kubernetes, observability, and EC2 fallback deployment. |
+| [Deployment workflow](deployment_workflow.svg) | Local Compose, dev/prod Kustomize overlays, GitOps Kubernetes, observability, and EC2 fallback deployment. |
 
 Regenerate the complete set with:
 
 ```bash
-python docs/generate_workflow_svgs.py
+make diagrams
 ```
 
 The generator removes stale SVGs in this directory before writing the current

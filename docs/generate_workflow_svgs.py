@@ -155,16 +155,16 @@ def project_diagram() -> None:
     width, height = 1800, 1480
     parts = svg_open(
         "GenoPredict MLOps Architecture",
-        "A production-oriented map of data, model governance, serving, monitoring, security, and deployment.",
+        "A production-oriented map of data, model governance, serving, documentation, monitoring, security, and deployment.",
         width,
         height,
     )
     lanes = (
-        ("Data and Feature Store", 150, ("DVC + S3", "Chromosome stitching", "Feature schema", "Parquet lookup")),
-        ("Training and Governance", 395, ("Prefect flow", "XGBoost", "Evaluation + SHAP", "MLflow Production")),
+        ("Data and Feature Store", 150, ("DVC + S3", "Chromosome stitching", "Feature schema doc", "Parquet lookup")),
+        ("Training and Governance", 395, ("Prefect flow", "XGBoost", "Model card", "MLflow Production")),
         ("Application Workflows", 640, ("React UI", "Nginx proxy", "FastAPI", "VCF batch")),
-        ("Monitoring and Operations", 885, ("Prediction logs", "Prometheus", "Drift monitor", "Grafana alerts")),
-        ("Delivery", 1130, ("GitHub Actions", "GHCR images", "Argo CD", "AWS EC2 fallback")),
+        ("Monitoring and Operations", 885, ("Demo check", "Prometheus", "Drift monitor", "Grafana alerts")),
+        ("Delivery", 1130, ("GitHub Actions", "GHCR images", "K8s overlays", "AWS EC2 fallback")),
     )
     lane_colors = ("teal", "violet", "blue", "green", "amber")
     for (lane_title, y, labels), tone in zip(lanes, lane_colors):
@@ -184,7 +184,7 @@ def project_diagram() -> None:
     elbow(parts, ((1490, 585), (1490, 640), (270, 640)), soft=True)
     elbow(parts, ((1490, 830), (1490, 885), (270, 885)), soft=True)
     elbow(parts, ((1490, 1075), (1490, 1130), (270, 1130)), soft=True)
-    caption(parts, 86, height - 72, "Runtime ports: frontend 3000 | API 8000 | MLflow 5000 | Prometheus 9090 | Grafana 3001 | drift monitor 8001", mono=True)
+    caption(parts, 86, height - 72, "Ops commands: make docs | make demo-check | make k8s-render-dev | make k8s-render-prod", mono=True)
     svg_close(parts, "project_workflow.svg")
 
 
@@ -200,10 +200,10 @@ def main() -> None:
             Box("source", "dbNSFP extracts", ("Raw chromosome files", "DVC pointers in repo"), "amber"),
             Box("version", "DVC + S3", ("Pull data when missing", "Remote artifact store"), "teal"),
             Box("stitch", "Stitching_chr.py", ("Polars/PyArrow processing", "Unified variant table"), "green"),
-            Box("encode", "Feature encoding", ("Contracted model inputs", "Training-ready parquet"), "blue"),
+            Box("encode", "Feature encoding", ("Contracted model inputs", "Generated schema docs"), "blue"),
             Box("serve", "Feature store", ("FastAPI local lookup", "S3 fallback bridge"), "violet"),
         ),
-        "Command: python run_pipeline.py prepares data before training.",
+        "Commands: python run_pipeline.py | make feature-schema.",
     )
     flow_diagram(
         "training_pipeline.svg",
@@ -213,10 +213,10 @@ def main() -> None:
             Box("flow", "Prefect launcher", ("run_pipeline.py", "YAML configuration"), "blue"),
             Box("train", "XGBoost", ("Training metrics", "MLflow artifacts"), "red"),
             Box("validate", "Evaluation", ("5-fold CV", "Quality evidence"), "slate"),
-            Box("explain", "SHAP", ("Bar and summary plots", "Feature transparency"), "amber"),
+            Box("explain", "Model card + SHAP", ("Documented limits", "Feature transparency"), "amber"),
             Box("promote", "Registry gate", ("Best finished run", "PR-AUC >= 0.80"), "violet"),
         ),
-        "Output: models:/GenomicVariantModel@Production with tracked metrics and artifacts.",
+        "Outputs: models:/GenomicVariantModel@Production, docs/MODEL_CARD.md, and SHAP artifacts.",
     )
     flow_diagram(
         "inference_workflow.svg",
@@ -250,12 +250,12 @@ def main() -> None:
         "Runtime events and metrics feed dashboards, alerts, and drift reports.",
         (
             Box("events", "Prediction log", ("JSONL event stream", "History endpoints"), "red"),
-            Box("metrics", "API metrics", ("Latency and errors", "Model status"), "blue"),
+            Box("demo", "Demo check", ("Health, model info", "metrics and drift"), "blue"),
             Box("drift", "Drift service", ("Continuous summary", "Report artifacts"), "green"),
             Box("scrape", "Prometheus", ("API + drift targets", "15s interval"), "amber"),
             Box("alert", "Grafana", ("Dashboards", "Provisioned alerts"), "violet"),
         ),
-        "Alerts cover API availability, model loading, prediction errors, and data drift.",
+        "Commands: make demo-check | make test.",
     )
     flow_diagram(
         "cicd_security_workflow.svg",
@@ -277,11 +277,11 @@ def main() -> None:
         (
             Box("local", "Docker Compose", ("Full app stack", "developer smoke tests"), "slate"),
             Box("registry", "GHCR images", ("API, frontend, MLflow", "SHA-tagged releases"), "blue"),
-            Box("gitops", "Argo CD", ("Kustomize manifests", "self-healing sync"), "violet"),
+            Box("gitops", "Argo CD", ("dev/prod overlays", "self-healing sync"), "violet"),
             Box("monitor", "Observability", ("Prometheus", "Grafana"), "green"),
             Box("aws", "EC2 fallback", ("t3.small default", "cost guardrails"), "amber"),
         ),
-        "Kubernetes manifests: deploy/k8s/base | Argo CD app: deploy/argocd/application.yaml.",
+        "Kubernetes manifests: deploy/k8s/base and deploy/k8s/overlays/{dev,prod}.",
     )
     project_diagram()
 

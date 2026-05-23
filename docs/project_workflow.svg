@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1480" viewBox="0 0 1800 1480" role="img" aria-labelledby="title desc">
   <title id="title">GenoPredict MLOps Architecture</title>
-  <desc id="desc">A production-oriented map of data, model governance, serving, monitoring, security, and deployment.</desc>
+  <desc id="desc">A production-oriented map of data, model governance, serving, documentation, monitoring, security, and deployment.</desc>
   <defs>
     <style>
       .page { fill: #f5f7fb; }
@@ -26,7 +26,7 @@
   <rect class="page" width="100%" height="100%"/>
   <rect class="panel" x="32" y="28" width="1736" height="1424" rx="8"/>
   <text class="title" x="68" y="80">GenoPredict MLOps Architecture</text>
-  <text class="subtitle" x="68" y="108">A production-oriented map of data, model governance, serving, monitoring, security, and deployment.</text>
+  <text class="subtitle" x="68" y="108">A production-oriented map of data, model governance, serving, documentation, monitoring, security, and deployment.</text>
   <rect x="68" y="150" width="1664" height="190" rx="8" fill="#ffffff" stroke="#d8dee8" stroke-width="1.4"/>
   <text class="section" x="96" y="184">Data and Feature Store</text>
   <g>
@@ -50,7 +50,7 @@
     <rect x="890" y="208" width="320" height="29" rx="8" fill="#0f766e"/>
     <path d="M890 229 H1210 V237 H890 Z" fill="#0f766e"/>
     <text class="label" x="906" y="228">3</text>
-    <text class="box-title" x="908" y="266">Feature schema</text>
+    <text class="box-title" x="908" y="266">Feature schema doc</text>
     <text class="body" x="908" y="292">Primary project capability</text>
   </g>
   <g>
@@ -87,7 +87,7 @@
     <rect x="890" y="453" width="320" height="29" rx="8" fill="#6d28d9"/>
     <path d="M890 474 H1210 V482 H890 Z" fill="#6d28d9"/>
     <text class="label" x="906" y="473">3</text>
-    <text class="box-title" x="908" y="511">Evaluation + SHAP</text>
+    <text class="box-title" x="908" y="511">Model card</text>
     <text class="body" x="908" y="537">Primary project capability</text>
   </g>
   <g>
@@ -145,7 +145,7 @@
     <rect x="110" y="943" width="320" height="29" rx="8" fill="#15803d"/>
     <path d="M110 964 H430 V972 H110 Z" fill="#15803d"/>
     <text class="label" x="126" y="963">1</text>
-    <text class="box-title" x="128" y="1001">Prediction logs</text>
+    <text class="box-title" x="128" y="1001">Demo check</text>
     <text class="body" x="128" y="1027">Primary project capability</text>
   </g>
   <g>
@@ -198,7 +198,7 @@
     <rect x="890" y="1188" width="320" height="29" rx="8" fill="#b45309"/>
     <path d="M890 1209 H1210 V1217 H890 Z" fill="#b45309"/>
     <text class="label" x="906" y="1208">3</text>
-    <text class="box-title" x="908" y="1246">Argo CD</text>
+    <text class="box-title" x="908" y="1246">K8s overlays</text>
     <text class="body" x="908" y="1272">Primary project capability</text>
   </g>
   <g>
@@ -215,5 +215,5 @@
   <path class="arrow-soft" d="M1490 585 L1490 640 L270 640"/>
   <path class="arrow-soft" d="M1490 830 L1490 885 L270 885"/>
   <path class="arrow-soft" d="M1490 1075 L1490 1130 L270 1130"/>
-  <text class="mono" x="86" y="1408">Runtime ports: frontend 3000 | API 8000 | MLflow 5000 | Prometheus 9090 | Grafana 3001 | drift monitor 8001</text>
+  <text class="mono" x="86" y="1408">Ops commands: make docs | make demo-check | make k8s-render-dev | make k8s-render-prod</text>
 </svg>

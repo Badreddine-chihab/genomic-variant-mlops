@@ -61,7 +61,7 @@
     <text class="label" x="909" y="225">ENCODE</text>
     <text class="box-title" x="911" y="263">Feature encoding</text>
     <text class="body" x="911" y="289">Contracted model inputs</text>
-    <text class="body" x="911" y="308">Training-ready parquet</text>
+    <text class="body" x="911" y="308">Generated schema docs</text>
   </g>
   <g>
     <rect x="1166" y="205" width="237" height="148" rx="8" fill="#f5f3ff" stroke="#d8dee8" stroke-width="1.4"/>
@@ -76,5 +76,5 @@
   <path class="arrow" d="M584 279 L620 279"/>
   <path class="arrow" d="M857 279 L893 279"/>
   <path class="arrow" d="M1130 279 L1166 279"/>
-  <text class="mono" x="74" y="490">Command: python run_pipeline.py prepares data before training.</text>
+  <text class="mono" x="74" y="490">Commands: python run_pipeline.py | make feature-schema.</text>
 </svg>

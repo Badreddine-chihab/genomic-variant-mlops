@@ -40,10 +40,10 @@
     <rect x="347" y="205" width="237" height="148" rx="8" fill="#eff6ff" stroke="#d8dee8" stroke-width="1.4"/>
     <rect x="347" y="205" width="237" height="29" rx="8" fill="#2563eb"/>
     <path d="M347 226 H584 V234 H347 Z" fill="#2563eb"/>
-    <text class="label" x="363" y="225">METRICS</text>
-    <text class="box-title" x="365" y="263">API metrics</text>
-    <text class="body" x="365" y="289">Latency and errors</text>
-    <text class="body" x="365" y="308">Model status</text>
+    <text class="label" x="363" y="225">DEMO</text>
+    <text class="box-title" x="365" y="263">Demo check</text>
+    <text class="body" x="365" y="289">Health, model info</text>
+    <text class="body" x="365" y="308">metrics and drift</text>
   </g>
   <g>
     <rect x="620" y="205" width="237" height="148" rx="8" fill="#f0fdf4" stroke="#d8dee8" stroke-width="1.4"/>
@@ -76,5 +76,5 @@
   <path class="arrow" d="M584 279 L620 279"/>
   <path class="arrow" d="M857 279 L893 279"/>
   <path class="arrow" d="M1130 279 L1166 279"/>
-  <text class="mono" x="74" y="490">Alerts cover API availability, model loading, prediction errors, and data drift.</text>
+  <text class="mono" x="74" y="490">Commands: make demo-check | make test.</text>
 </svg>

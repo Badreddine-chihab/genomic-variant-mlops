@@ -59,8 +59,8 @@
     <rect x="893" y="205" width="237" height="29" rx="8" fill="#b45309"/>
     <path d="M893 226 H1130 V234 H893 Z" fill="#b45309"/>
     <text class="label" x="909" y="225">EXPLAIN</text>
-    <text class="box-title" x="911" y="263">SHAP</text>
-    <text class="body" x="911" y="289">Bar and summary plots</text>
+    <text class="box-title" x="911" y="263">Model card + SHAP</text>
+    <text class="body" x="911" y="289">Documented limits</text>
     <text class="body" x="911" y="308">Feature transparency</text>
   </g>
   <g>
@@ -76,5 +76,5 @@
   <path class="arrow" d="M584 279 L620 279"/>
   <path class="arrow" d="M857 279 L893 279"/>
   <path class="arrow" d="M1130 279 L1166 279"/>
-  <text class="mono" x="74" y="490">Output: models:/GenomicVariantModel@Production with tracked metrics and artifacts.</text>
+  <text class="mono" x="74" y="490">Outputs: models:/GenomicVariantModel@Production, docs/MODEL_CARD.md, and SHAP artifacts.</text>
 </svg>

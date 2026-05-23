@@ -1,7 +1,8 @@
 # Argo CD Deployment
 
-This repository includes a Kubernetes base in `deploy/k8s/base` and an Argo CD
-`Application` in `deploy/argocd/application.yaml`.
+This repository includes a Kubernetes base in `deploy/k8s/base`, dev/prod
+Kustomize overlays under `deploy/k8s/overlays`, and Argo CD applications in
+`deploy/argocd`.
 
 ## Prerequisites
 
@@ -39,11 +40,33 @@ Apply the Argo CD application:
 kubectl apply -f deploy/argocd/application.yaml
 ```
 
+Apply environment-specific applications:
+
+```bash
+kubectl apply -f deploy/argocd/application-dev.yaml
+kubectl apply -f deploy/argocd/application-prod.yaml
+```
+
 Or test the Kubernetes base directly:
 
 ```bash
 kubectl apply -k deploy/k8s/base
 ```
+
+Render overlays before syncing them:
+
+```bash
+make k8s-render-dev
+make k8s-render-prod
+```
+
+The dev overlay uses `genopredict-dev` and local `*.genopredict.local` hosts.
+The prod overlay uses `genopredict-prod`, stronger resource defaults, secure
+Grafana cookies, and `*.genopredict.example.com` placeholder hosts.
+
+Before using the prod overlay for a real cluster, replace
+`deploy/k8s/overlays/prod/secrets/grafana-admin.env.example` with a private
+secret file and update the overlay if needed. Do not commit real credentials.
 
 If Argo CD reports `app path does not exist`, push this branch first or change
 `targetRevision` in `deploy/argocd/application.yaml` to the branch that contains
