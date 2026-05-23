@@ -33,7 +33,7 @@ boto3>=1.35.0
 botocore==1.42.82
 
 # --- Visualization & Validation ---
-matplotlib>=3.9.0
+matplotlib>=3.10.9
 seaborn>=0.13.0
 pytest>=8.2.0
 
