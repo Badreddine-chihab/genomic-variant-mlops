@@ -40,15 +40,15 @@ def fetch_features_from_s3(chrom, pos, ref, alt):
         con = get_s3_connection()
         
         # Requête optimisée avec Predicate Pushdown
-        query = f"""
-            SELECT * FROM read_parquet('{s3_path}') 
-            WHERE "pos(1-based)" = {pos}
-              AND "ref" = '{ref}'
-              AND "alt" = '{alt}'
+        query = """
+            SELECT * FROM read_parquet(?)
+            WHERE "pos(1-based)" = ?
+              AND "ref" = ?
+              AND "alt" = ?
             LIMIT 1
         """
-        
-        df = con.execute(query).df()
+
+        df = con.execute(query, [s3_path, pos, ref, alt]).df()
         logger.info(f"✅ Features fetched from S3: {s3_path}")
         return df
         

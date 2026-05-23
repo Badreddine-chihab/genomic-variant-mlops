@@ -213,7 +213,8 @@ def main() -> None:
     parser.add_argument("--report", type=Path, default=REPORT_DEFAULT)
     parser.add_argument("--summary", type=Path, default=SUMMARY_DEFAULT)
     parser.add_argument("--interval-seconds", type=int, default=300)
-    parser.add_argument("--metrics-host", default="0.0.0.0")
+    # Container metrics endpoint must bind externally for Docker/Kubernetes scraping.
+    parser.add_argument("--metrics-host", default="0.0.0.0")  # nosec B104
     parser.add_argument("--metrics-port", type=int, default=8001)
     parser.add_argument("--once", action="store_true")
     args = parser.parse_args()

@@ -1,5 +1,6 @@
 import duckdb
 import os
+import subprocess
 
 con = duckdb.connect()
 con.execute("INSTALL httpfs; LOAD httpfs; INSTALL aws; LOAD aws;")
@@ -44,21 +45,23 @@ for chrom, s3_source in MAPPING_FAIL.items():
     try:
         # 1. Téléchargement via AWS CLI (très robuste)
         print(f"📥 Téléchargement de la source S3...")
-        os.system(f"aws s3 cp {s3_source} {local_csv}")
+        subprocess.run(["aws", "s3", "cp", s3_source, local_csv], check=True)
 
         # 2. Conversion locale avec DuckDB
         print(f"⚙️ Conversion CSV -> Parquet...")
-        con.execute(f"""
-            COPY (
-                SELECT * FROM read_csv_auto('{local_csv}', 
-                    compression='gzip', sep='\t', header=True, 
-                    all_varchar=True, nullstr='.')
-            ) TO '{local_parquet}' (FORMAT 'PARQUET');
-        """)
+        relation = con.read_csv(
+            local_csv,
+            compression="gzip",
+            sep="\t",
+            header=True,
+            all_varchar=True,
+            nullstr=".",
+        )
+        relation.write_parquet(local_parquet)
 
         # 3. Upload vers le nouveau stockage partitionné
         print(f"📤 Upload du résultat vers S3...")
-        os.system(f"aws s3 cp {local_parquet} {s3_dest}")
+        subprocess.run(["aws", "s3", "cp", local_parquet, s3_dest], check=True)
 
         # 4. Nettoyage
         if os.path.exists(local_csv): os.remove(local_csv)
