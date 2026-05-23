@@ -34,7 +34,7 @@ botocore==1.42.82
 
 # --- Visualization & Validation ---
 matplotlib>=3.9.0
-seaborn>=0.13.0
+seaborn>=0.13.2
 pytest>=8.2.0
 
 # --- Optional: For Data Versioning ---
