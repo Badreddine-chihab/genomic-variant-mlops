@@ -25,7 +25,7 @@ Streamlit is kept in repository for reference only and is no longer the primary 
 
 ## Architecture
 
-The project documentation includes a refreshed, generated SVG diagram set:
+The project documentation includes a refreshed, icon-based SVG architecture set:
 
 - [End-to-end MLOps workflow](docs/project_workflow.svg)
 - [Data pipeline](docs/data_pipeline.svg)

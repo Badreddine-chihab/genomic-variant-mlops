@@ -1,219 +1,264 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1480" viewBox="0 0 1800 1480" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1840" height="1520" viewBox="0 0 1840 1520" role="img" aria-labelledby="title desc">
   <title id="title">GenoPredict MLOps Architecture</title>
-  <desc id="desc">A production-oriented map of data, model governance, serving, documentation, monitoring, security, and deployment.</desc>
+  <desc id="desc">Production-oriented lifecycle view with data, governance, serving, monitoring, security, and deployment.</desc>
   <defs>
     <style>
       .page { fill: #f5f7fb; }
-      .panel { fill: #ffffff; stroke: #d8dee8; stroke-width: 1.4; }
-      .title { font: 700 32px Arial, Helvetica, sans-serif; fill: #172033; }
-      .subtitle { font: 400 16px Arial, Helvetica, sans-serif; fill: #657083; }
-      .section { font: 700 15px Arial, Helvetica, sans-serif; fill: #172033; }
-      .label { font: 700 11px Arial, Helvetica, sans-serif; fill: #ffffff; letter-spacing: .7px; }
+      .canvas { fill: #ffffff; stroke: #d5dce8; stroke-width: 1.3; }
+      .title { font: 700 34px Arial, Helvetica, sans-serif; fill: #172033; }
+      .subtitle { font: 400 16px Arial, Helvetica, sans-serif; fill: #64748b; }
+      .zone-title { font: 700 13px Arial, Helvetica, sans-serif; fill: #334155; letter-spacing: .5px; }
+      .label { font: 700 10px Arial, Helvetica, sans-serif; fill: #ffffff; letter-spacing: .7px; }
       .box-title { font: 700 16px Arial, Helvetica, sans-serif; fill: #172033; }
-      .body { font: 400 13px Arial, Helvetica, sans-serif; fill: #465366; }
-      .caption { font: 600 12px Arial, Helvetica, sans-serif; fill: #657083; }
-      .mono { font: 600 12px Consolas, Menlo, monospace; fill: #465366; }
-      .arrow { stroke: #657083; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
-      .arrow-soft { stroke: #98a2b3; stroke-width: 2; fill: none; stroke-dasharray: 7 7; marker-end: url(#arrow-soft); }
+      .body { font: 400 13px Arial, Helvetica, sans-serif; fill: #475569; }
+      .caption { font: 600 12px Arial, Helvetica, sans-serif; fill: #64748b; }
+      .mono { font: 600 12px Consolas, Menlo, monospace; fill: #475569; }
+      .icon { fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+      .icon-fill { fill: currentColor; stroke: none; }
+      .arrow { stroke: #64748b; stroke-width: 2.3; fill: none; marker-end: url(#arrow); }
+      .arrow-soft { stroke: #94a3b8; stroke-width: 2; fill: none; stroke-dasharray: 7 7; marker-end: url(#arrow-soft); }
     </style>
     <marker id="arrow" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto" markerUnits="strokeWidth">
-      <path d="M1 1 L9 5.5 L1 10 Z" fill="#657083"/>
+      <path d="M1 1 L9 5.5 L1 10 Z" fill="#64748b"/>
     </marker>
     <marker id="arrow-soft" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto" markerUnits="strokeWidth">
-      <path d="M1 1 L9 5.5 L1 10 Z" fill="#98a2b3"/>
+      <path d="M1 1 L9 5.5 L1 10 Z" fill="#94a3b8"/>
     </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#0f172a" flood-opacity=".10"/>
+    </filter>
   </defs>
   <rect class="page" width="100%" height="100%"/>
-  <rect class="panel" x="32" y="28" width="1736" height="1424" rx="8"/>
-  <text class="title" x="68" y="80">GenoPredict MLOps Architecture</text>
-  <text class="subtitle" x="68" y="108">A production-oriented map of data, model governance, serving, documentation, monitoring, security, and deployment.</text>
-  <rect x="68" y="150" width="1664" height="190" rx="8" fill="#ffffff" stroke="#d8dee8" stroke-width="1.4"/>
-  <text class="section" x="96" y="184">Data and Feature Store</text>
-  <g>
-    <rect x="110" y="208" width="320" height="92" rx="8" fill="#f0fdfa" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="110" y="208" width="320" height="29" rx="8" fill="#0f766e"/>
-    <path d="M110 229 H430 V237 H110 Z" fill="#0f766e"/>
-    <text class="label" x="126" y="228">1</text>
-    <text class="box-title" x="128" y="266">DVC + S3</text>
-    <text class="body" x="128" y="292">Primary project capability</text>
+  <rect class="canvas" x="28" y="26" width="1784" height="1468" rx="10"/>
+  <text class="title" x="66" y="78">GenoPredict MLOps Architecture</text>
+  <text class="subtitle" x="66" y="108">Production-oriented lifecycle view with data, governance, serving, monitoring, security, and deployment.</text>
+  <rect x="68" y="150" width="1704" height="205" rx="10" fill="#ecfeff" stroke="#0f766e" stroke-opacity=".22" stroke-width="1.2"/>
+  <text class="zone-title" x="86" y="178">DATA AND FEATURE STORE</text>
+  <g filter="url(#shadow)">
+    <rect x="110" y="208" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="110" y="208" width="330" height="6" rx="3" fill="#0f766e"/>
+    <rect x="128" y="232" width="42" height="42" rx="10" fill="#ecfeff" stroke="#0f766e" stroke-opacity=".28"/>
+    <g transform="translate(137 241)" style="color:#0f766e"><path class="icon" d="M7 17h10a5 5 0 0 0 .4-10 7 7 0 0 0-13 2.5A4 4 0 0 0 7 17z"/></g>
+    <rect x="182" y="234" width="58" height="22" rx="11" fill="#0f766e"/>
+    <text class="label" x="196" y="249">1</text>
+    <text class="box-title" x="182" y="274">DVC + S3</text>
+    <text class="body" x="132" y="302">Documented project capability</text>
   </g>
-  <g>
-    <rect x="500" y="208" width="320" height="92" rx="8" fill="#f0fdfa" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="500" y="208" width="320" height="29" rx="8" fill="#0f766e"/>
-    <path d="M500 229 H820 V237 H500 Z" fill="#0f766e"/>
-    <text class="label" x="516" y="228">2</text>
-    <text class="box-title" x="518" y="266">Chromosome stitching</text>
-    <text class="body" x="518" y="292">Primary project capability</text>
+  <g filter="url(#shadow)">
+    <rect x="510" y="208" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="510" y="208" width="330" height="6" rx="3" fill="#0f766e"/>
+    <rect x="528" y="232" width="42" height="42" rx="10" fill="#ecfeff" stroke="#0f766e" stroke-opacity=".28"/>
+    <g transform="translate(537 241)" style="color:#0f766e"><path class="icon" d="M8 7 3 12l5 5"/><path class="icon" d="m16 7 5 5-5 5"/><path class="icon" d="m14 4-4 16"/></g>
+    <rect x="582" y="234" width="58" height="22" rx="11" fill="#0f766e"/>
+    <text class="label" x="596" y="249">2</text>
+    <text class="box-title" x="582" y="274">Chromosome stitching</text>
+    <text class="body" x="532" y="302">Documented project capability</text>
   </g>
-  <g>
-    <rect x="890" y="208" width="320" height="92" rx="8" fill="#f0fdfa" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="890" y="208" width="320" height="29" rx="8" fill="#0f766e"/>
-    <path d="M890 229 H1210 V237 H890 Z" fill="#0f766e"/>
-    <text class="label" x="906" y="228">3</text>
-    <text class="box-title" x="908" y="266">Feature schema doc</text>
-    <text class="body" x="908" y="292">Primary project capability</text>
+  <g filter="url(#shadow)">
+    <rect x="910" y="208" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="910" y="208" width="330" height="6" rx="3" fill="#0f766e"/>
+    <rect x="928" y="232" width="42" height="42" rx="10" fill="#ecfeff" stroke="#0f766e" stroke-opacity=".28"/>
+    <g transform="translate(937 241)" style="color:#0f766e"><path class="icon" d="M6 3h8l4 4v14H6z"/><path class="icon" d="M14 3v5h5"/><path class="icon" d="M9 13h6M9 17h6"/></g>
+    <rect x="982" y="234" width="58" height="22" rx="11" fill="#0f766e"/>
+    <text class="label" x="996" y="249">3</text>
+    <text class="box-title" x="982" y="274">Feature schema doc</text>
+    <text class="body" x="932" y="302">Documented project capability</text>
   </g>
-  <g>
-    <rect x="1280" y="208" width="320" height="92" rx="8" fill="#f0fdfa" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="1280" y="208" width="320" height="29" rx="8" fill="#0f766e"/>
-    <path d="M1280 229 H1600 V237 H1280 Z" fill="#0f766e"/>
-    <text class="label" x="1296" y="228">4</text>
-    <text class="box-title" x="1298" y="266">Parquet lookup</text>
-    <text class="body" x="1298" y="292">Primary project capability</text>
+  <g filter="url(#shadow)">
+    <rect x="1310" y="208" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="1310" y="208" width="330" height="6" rx="3" fill="#0f766e"/>
+    <rect x="1328" y="232" width="42" height="42" rx="10" fill="#ecfeff" stroke="#0f766e" stroke-opacity=".28"/>
+    <g transform="translate(1337 241)" style="color:#0f766e"><ellipse class="icon" cx="12" cy="5" rx="8" ry="3"/><path class="icon" d="M4 5v10c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path class="icon" d="M4 10c0 1.7 3.6 3 8 3s8-1.3 8-3"/></g>
+    <rect x="1382" y="234" width="58" height="22" rx="11" fill="#0f766e"/>
+    <text class="label" x="1396" y="249">4</text>
+    <text class="box-title" x="1382" y="274">Parquet lookup</text>
+    <text class="body" x="1332" y="302">Documented project capability</text>
   </g>
-  <path class="arrow" d="M430 254 L500 254"/>
-  <path class="arrow" d="M820 254 L890 254"/>
-  <path class="arrow" d="M1210 254 L1280 254"/>
-  <rect x="68" y="395" width="1664" height="190" rx="8" fill="#ffffff" stroke="#d8dee8" stroke-width="1.4"/>
-  <text class="section" x="96" y="429">Training and Governance</text>
-  <g>
-    <rect x="110" y="453" width="320" height="92" rx="8" fill="#f5f3ff" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="110" y="453" width="320" height="29" rx="8" fill="#6d28d9"/>
-    <path d="M110 474 H430 V482 H110 Z" fill="#6d28d9"/>
-    <text class="label" x="126" y="473">1</text>
-    <text class="box-title" x="128" y="511">Prefect flow</text>
-    <text class="body" x="128" y="537">Primary project capability</text>
+  <path class="arrow" d="M440 264 L510 264"/>
+  <path class="arrow" d="M840 264 L910 264"/>
+  <path class="arrow" d="M1240 264 L1310 264"/>
+  <rect x="68" y="405" width="1704" height="205" rx="10" fill="#f5f3ff" stroke="#6d28d9" stroke-opacity=".22" stroke-width="1.2"/>
+  <text class="zone-title" x="86" y="433">TRAINING AND GOVERNANCE</text>
+  <g filter="url(#shadow)">
+    <rect x="110" y="463" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="110" y="463" width="330" height="6" rx="3" fill="#6d28d9"/>
+    <rect x="128" y="487" width="42" height="42" rx="10" fill="#f5f3ff" stroke="#6d28d9" stroke-opacity=".28"/>
+    <g transform="translate(137 496)" style="color:#6d28d9"><path class="icon" d="M4 17h16"/><path class="icon" d="M7 17 5 21"/><path class="icon" d="m17 17 2 4"/><rect class="icon" x="5" y="4" width="14" height="11" rx="2"/><path class="icon" d="M8 8h8M8 12h5"/></g>
+    <rect x="182" y="489" width="58" height="22" rx="11" fill="#6d28d9"/>
+    <text class="label" x="196" y="504">1</text>
+    <text class="box-title" x="182" y="529">Prefect flow</text>
+    <text class="body" x="132" y="557">Documented project capability</text>
   </g>
-  <g>
-    <rect x="500" y="453" width="320" height="92" rx="8" fill="#f5f3ff" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="500" y="453" width="320" height="29" rx="8" fill="#6d28d9"/>
-    <path d="M500 474 H820 V482 H500 Z" fill="#6d28d9"/>
-    <text class="label" x="516" y="473">2</text>
-    <text class="box-title" x="518" y="511">XGBoost</text>
-    <text class="body" x="518" y="537">Primary project capability</text>
+  <g filter="url(#shadow)">
+    <rect x="510" y="463" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="510" y="463" width="330" height="6" rx="3" fill="#6d28d9"/>
+    <rect x="528" y="487" width="42" height="42" rx="10" fill="#f5f3ff" stroke="#6d28d9" stroke-opacity=".28"/>
+    <g transform="translate(537 496)" style="color:#6d28d9"><path class="icon" d="M9 5a4 4 0 0 0-4 4 4 4 0 0 0 1 7.8A4 4 0 0 0 12 20V5a3 3 0 0 0-3-3z"/><path class="icon" d="M15 5a4 4 0 0 1 4 4 4 4 0 0 1-1 7.8A4 4 0 0 1 12 20V5a3 3 0 0 1 3-3z"/></g>
+    <rect x="582" y="489" width="58" height="22" rx="11" fill="#6d28d9"/>
+    <text class="label" x="596" y="504">2</text>
+    <text class="box-title" x="582" y="529">XGBoost</text>
+    <text class="body" x="532" y="557">Documented project capability</text>
   </g>
-  <g>
-    <rect x="890" y="453" width="320" height="92" rx="8" fill="#f5f3ff" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="890" y="453" width="320" height="29" rx="8" fill="#6d28d9"/>
-    <path d="M890 474 H1210 V482 H890 Z" fill="#6d28d9"/>
-    <text class="label" x="906" y="473">3</text>
-    <text class="box-title" x="908" y="511">Model card</text>
-    <text class="body" x="908" y="537">Primary project capability</text>
+  <g filter="url(#shadow)">
+    <rect x="910" y="463" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="910" y="463" width="330" height="6" rx="3" fill="#6d28d9"/>
+    <rect x="928" y="487" width="42" height="42" rx="10" fill="#f5f3ff" stroke="#6d28d9" stroke-opacity=".28"/>
+    <g transform="translate(937 496)" style="color:#6d28d9"><path class="icon" d="M6 3h8l4 4v14H6z"/><path class="icon" d="M14 3v5h5"/><path class="icon" d="M9 13h6M9 17h6"/></g>
+    <rect x="982" y="489" width="58" height="22" rx="11" fill="#6d28d9"/>
+    <text class="label" x="996" y="504">3</text>
+    <text class="box-title" x="982" y="529">Model card</text>
+    <text class="body" x="932" y="557">Documented project capability</text>
   </g>
-  <g>
-    <rect x="1280" y="453" width="320" height="92" rx="8" fill="#f5f3ff" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="1280" y="453" width="320" height="29" rx="8" fill="#6d28d9"/>
-    <path d="M1280 474 H1600 V482 H1280 Z" fill="#6d28d9"/>
-    <text class="label" x="1296" y="473">4</text>
-    <text class="box-title" x="1298" y="511">MLflow Production</text>
-    <text class="body" x="1298" y="537">Primary project capability</text>
+  <g filter="url(#shadow)">
+    <rect x="1310" y="463" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="1310" y="463" width="330" height="6" rx="3" fill="#6d28d9"/>
+    <rect x="1328" y="487" width="42" height="42" rx="10" fill="#f5f3ff" stroke="#6d28d9" stroke-opacity=".28"/>
+    <g transform="translate(1337 496)" style="color:#6d28d9"><path class="icon" d="M5 6h14v12H5z"/><path class="icon" d="M8 9h8M8 13h8"/><path class="icon" d="M8 18v3h8v-3"/></g>
+    <rect x="1382" y="489" width="58" height="22" rx="11" fill="#6d28d9"/>
+    <text class="label" x="1396" y="504">4</text>
+    <text class="box-title" x="1382" y="529">MLflow Production</text>
+    <text class="body" x="1332" y="557">Documented project capability</text>
   </g>
-  <path class="arrow" d="M430 499 L500 499"/>
-  <path class="arrow" d="M820 499 L890 499"/>
-  <path class="arrow" d="M1210 499 L1280 499"/>
-  <rect x="68" y="640" width="1664" height="190" rx="8" fill="#ffffff" stroke="#d8dee8" stroke-width="1.4"/>
-  <text class="section" x="96" y="674">Application Workflows</text>
-  <g>
-    <rect x="110" y="698" width="320" height="92" rx="8" fill="#eff6ff" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="110" y="698" width="320" height="29" rx="8" fill="#2563eb"/>
-    <path d="M110 719 H430 V727 H110 Z" fill="#2563eb"/>
-    <text class="label" x="126" y="718">1</text>
-    <text class="box-title" x="128" y="756">React UI</text>
-    <text class="body" x="128" y="782">Primary project capability</text>
+  <path class="arrow" d="M440 519 L510 519"/>
+  <path class="arrow" d="M840 519 L910 519"/>
+  <path class="arrow" d="M1240 519 L1310 519"/>
+  <rect x="68" y="660" width="1704" height="205" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-opacity=".22" stroke-width="1.2"/>
+  <text class="zone-title" x="86" y="688">APPLICATION WORKFLOWS</text>
+  <g filter="url(#shadow)">
+    <rect x="110" y="718" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="110" y="718" width="330" height="6" rx="3" fill="#2563eb"/>
+    <rect x="128" y="742" width="42" height="42" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-opacity=".28"/>
+    <g transform="translate(137 751)" style="color:#2563eb"><rect class="icon" x="4" y="5" width="16" height="11" rx="2"/><path class="icon" d="M9 20h6M12 16v4"/></g>
+    <rect x="182" y="744" width="58" height="22" rx="11" fill="#2563eb"/>
+    <text class="label" x="196" y="759">1</text>
+    <text class="box-title" x="182" y="784">React UI</text>
+    <text class="body" x="132" y="812">Documented project capability</text>
   </g>
-  <g>
-    <rect x="500" y="698" width="320" height="92" rx="8" fill="#eff6ff" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="500" y="698" width="320" height="29" rx="8" fill="#2563eb"/>
-    <path d="M500 719 H820 V727 H500 Z" fill="#2563eb"/>
-    <text class="label" x="516" y="718">2</text>
-    <text class="box-title" x="518" y="756">Nginx proxy</text>
-    <text class="body" x="518" y="782">Primary project capability</text>
+  <g filter="url(#shadow)">
+    <rect x="510" y="718" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="510" y="718" width="330" height="6" rx="3" fill="#2563eb"/>
+    <rect x="528" y="742" width="42" height="42" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-opacity=".28"/>
+    <g transform="translate(537 751)" style="color:#2563eb"><rect class="icon" x="4" y="5" width="16" height="6" rx="1"/><rect class="icon" x="4" y="13" width="16" height="6" rx="1"/><path class="icon" d="M7 8h.1M7 16h.1"/></g>
+    <rect x="582" y="744" width="58" height="22" rx="11" fill="#2563eb"/>
+    <text class="label" x="596" y="759">2</text>
+    <text class="box-title" x="582" y="784">Nginx proxy</text>
+    <text class="body" x="532" y="812">Documented project capability</text>
   </g>
-  <g>
-    <rect x="890" y="698" width="320" height="92" rx="8" fill="#eff6ff" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="890" y="698" width="320" height="29" rx="8" fill="#2563eb"/>
-    <path d="M890 719 H1210 V727 H890 Z" fill="#2563eb"/>
-    <text class="label" x="906" y="718">3</text>
-    <text class="box-title" x="908" y="756">FastAPI</text>
-    <text class="body" x="908" y="782">Primary project capability</text>
+  <g filter="url(#shadow)">
+    <rect x="910" y="718" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="910" y="718" width="330" height="6" rx="3" fill="#2563eb"/>
+    <rect x="928" y="742" width="42" height="42" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-opacity=".28"/>
+    <g transform="translate(937 751)" style="color:#2563eb"><path class="icon" d="M4 12h5"/><path class="icon" d="M15 12h5"/><circle class="icon" cx="12" cy="12" r="3"/><path class="icon" d="M12 4v5M12 15v5"/></g>
+    <rect x="982" y="744" width="58" height="22" rx="11" fill="#2563eb"/>
+    <text class="label" x="996" y="759">3</text>
+    <text class="box-title" x="982" y="784">FastAPI</text>
+    <text class="body" x="932" y="812">Documented project capability</text>
   </g>
-  <g>
-    <rect x="1280" y="698" width="320" height="92" rx="8" fill="#eff6ff" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="1280" y="698" width="320" height="29" rx="8" fill="#2563eb"/>
-    <path d="M1280 719 H1600 V727 H1280 Z" fill="#2563eb"/>
-    <text class="label" x="1296" y="718">4</text>
-    <text class="box-title" x="1298" y="756">VCF batch</text>
-    <text class="body" x="1298" y="782">Primary project capability</text>
+  <g filter="url(#shadow)">
+    <rect x="1310" y="718" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="1310" y="718" width="330" height="6" rx="3" fill="#2563eb"/>
+    <rect x="1328" y="742" width="42" height="42" rx="10" fill="#eff6ff" stroke="#2563eb" stroke-opacity=".28"/>
+    <g transform="translate(1337 751)" style="color:#2563eb"><path class="icon" d="M7 3c8 3 8 15 0 18"/><path class="icon" d="M17 3c-8 3-8 15 0 18"/><path class="icon" d="M8 7h8M8 12h8M8 17h8"/></g>
+    <rect x="1382" y="744" width="58" height="22" rx="11" fill="#2563eb"/>
+    <text class="label" x="1396" y="759">4</text>
+    <text class="box-title" x="1382" y="784">VCF batch</text>
+    <text class="body" x="1332" y="812">Documented project capability</text>
   </g>
-  <path class="arrow" d="M430 744 L500 744"/>
-  <path class="arrow" d="M820 744 L890 744"/>
-  <path class="arrow" d="M1210 744 L1280 744"/>
-  <rect x="68" y="885" width="1664" height="190" rx="8" fill="#ffffff" stroke="#d8dee8" stroke-width="1.4"/>
-  <text class="section" x="96" y="919">Monitoring and Operations</text>
-  <g>
-    <rect x="110" y="943" width="320" height="92" rx="8" fill="#f0fdf4" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="110" y="943" width="320" height="29" rx="8" fill="#15803d"/>
-    <path d="M110 964 H430 V972 H110 Z" fill="#15803d"/>
-    <text class="label" x="126" y="963">1</text>
-    <text class="box-title" x="128" y="1001">Demo check</text>
-    <text class="body" x="128" y="1027">Primary project capability</text>
+  <path class="arrow" d="M440 774 L510 774"/>
+  <path class="arrow" d="M840 774 L910 774"/>
+  <path class="arrow" d="M1240 774 L1310 774"/>
+  <rect x="68" y="915" width="1704" height="205" rx="10" fill="#f0fdf4" stroke="#15803d" stroke-opacity=".22" stroke-width="1.2"/>
+  <text class="zone-title" x="86" y="943">MONITORING AND OPERATIONS</text>
+  <g filter="url(#shadow)">
+    <rect x="110" y="973" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="110" y="973" width="330" height="6" rx="3" fill="#15803d"/>
+    <rect x="128" y="997" width="42" height="42" rx="10" fill="#f0fdf4" stroke="#15803d" stroke-opacity=".28"/>
+    <g transform="translate(137 1006)" style="color:#15803d"><path class="icon" d="M4 8V5a1 1 0 0 1 1-1h3"/><path class="icon" d="M16 4h3a1 1 0 0 1 1 1v3"/><path class="icon" d="M20 16v3a1 1 0 0 1-1 1h-3"/><path class="icon" d="M8 20H5a1 1 0 0 1-1-1v-3"/><path class="icon" d="M7 12h10"/></g>
+    <rect x="182" y="999" width="58" height="22" rx="11" fill="#15803d"/>
+    <text class="label" x="196" y="1014">1</text>
+    <text class="box-title" x="182" y="1039">Demo check</text>
+    <text class="body" x="132" y="1067">Documented project capability</text>
   </g>
-  <g>
-    <rect x="500" y="943" width="320" height="92" rx="8" fill="#f0fdf4" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="500" y="943" width="320" height="29" rx="8" fill="#15803d"/>
-    <path d="M500 964 H820 V972 H500 Z" fill="#15803d"/>
-    <text class="label" x="516" y="963">2</text>
-    <text class="box-title" x="518" y="1001">Prometheus</text>
-    <text class="body" x="518" y="1027">Primary project capability</text>
+  <g filter="url(#shadow)">
+    <rect x="510" y="973" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="510" y="973" width="330" height="6" rx="3" fill="#15803d"/>
+    <rect x="528" y="997" width="42" height="42" rx="10" fill="#f0fdf4" stroke="#15803d" stroke-opacity=".28"/>
+    <g transform="translate(537 1006)" style="color:#15803d"><path class="icon" d="M4 19V5"/><path class="icon" d="M4 19h16"/><rect class="icon" x="7" y="12" width="2.5" height="5"/><rect class="icon" x="12" y="8" width="2.5" height="9"/><rect class="icon" x="17" y="5" width="2.5" height="12"/></g>
+    <rect x="582" y="999" width="58" height="22" rx="11" fill="#15803d"/>
+    <text class="label" x="596" y="1014">2</text>
+    <text class="box-title" x="582" y="1039">Prometheus</text>
+    <text class="body" x="532" y="1067">Documented project capability</text>
   </g>
-  <g>
-    <rect x="890" y="943" width="320" height="92" rx="8" fill="#f0fdf4" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="890" y="943" width="320" height="29" rx="8" fill="#15803d"/>
-    <path d="M890 964 H1210 V972 H890 Z" fill="#15803d"/>
-    <text class="label" x="906" y="963">3</text>
-    <text class="box-title" x="908" y="1001">Drift monitor</text>
-    <text class="body" x="908" y="1027">Primary project capability</text>
+  <g filter="url(#shadow)">
+    <rect x="910" y="973" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="910" y="973" width="330" height="6" rx="3" fill="#15803d"/>
+    <rect x="928" y="997" width="42" height="42" rx="10" fill="#f0fdf4" stroke="#15803d" stroke-opacity=".28"/>
+    <g transform="translate(937 1006)" style="color:#15803d"><path class="icon" d="M12 3 22 20H2z"/><path class="icon" d="M12 9v5M12 17h.1"/></g>
+    <rect x="982" y="999" width="58" height="22" rx="11" fill="#15803d"/>
+    <text class="label" x="996" y="1014">3</text>
+    <text class="box-title" x="982" y="1039">Drift monitor</text>
+    <text class="body" x="932" y="1067">Documented project capability</text>
   </g>
-  <g>
-    <rect x="1280" y="943" width="320" height="92" rx="8" fill="#f0fdf4" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="1280" y="943" width="320" height="29" rx="8" fill="#15803d"/>
-    <path d="M1280 964 H1600 V972 H1280 Z" fill="#15803d"/>
-    <text class="label" x="1296" y="963">4</text>
-    <text class="box-title" x="1298" y="1001">Grafana alerts</text>
-    <text class="body" x="1298" y="1027">Primary project capability</text>
+  <g filter="url(#shadow)">
+    <rect x="1310" y="973" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="1310" y="973" width="330" height="6" rx="3" fill="#15803d"/>
+    <rect x="1328" y="997" width="42" height="42" rx="10" fill="#f0fdf4" stroke="#15803d" stroke-opacity=".28"/>
+    <g transform="translate(1337 1006)" style="color:#15803d"><circle class="icon" cx="12" cy="12" r="7"/><path class="icon" d="M12 12h5M12 12l-3-4M12 12l-4 4"/></g>
+    <rect x="1382" y="999" width="58" height="22" rx="11" fill="#15803d"/>
+    <text class="label" x="1396" y="1014">4</text>
+    <text class="box-title" x="1382" y="1039">Grafana alerts</text>
+    <text class="body" x="1332" y="1067">Documented project capability</text>
   </g>
-  <path class="arrow" d="M430 989 L500 989"/>
-  <path class="arrow" d="M820 989 L890 989"/>
-  <path class="arrow" d="M1210 989 L1280 989"/>
-  <rect x="68" y="1130" width="1664" height="190" rx="8" fill="#ffffff" stroke="#d8dee8" stroke-width="1.4"/>
-  <text class="section" x="96" y="1164">Delivery</text>
-  <g>
-    <rect x="110" y="1188" width="320" height="92" rx="8" fill="#fffbeb" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="110" y="1188" width="320" height="29" rx="8" fill="#b45309"/>
-    <path d="M110 1209 H430 V1217 H110 Z" fill="#b45309"/>
-    <text class="label" x="126" y="1208">1</text>
-    <text class="box-title" x="128" y="1246">GitHub Actions</text>
-    <text class="body" x="128" y="1272">Primary project capability</text>
+  <path class="arrow" d="M440 1029 L510 1029"/>
+  <path class="arrow" d="M840 1029 L910 1029"/>
+  <path class="arrow" d="M1240 1029 L1310 1029"/>
+  <rect x="68" y="1170" width="1704" height="205" rx="10" fill="#fffbeb" stroke="#b45309" stroke-opacity=".22" stroke-width="1.2"/>
+  <text class="zone-title" x="86" y="1198">DELIVERY AND SECURITY</text>
+  <g filter="url(#shadow)">
+    <rect x="110" y="1228" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="110" y="1228" width="330" height="6" rx="3" fill="#b45309"/>
+    <rect x="128" y="1252" width="42" height="42" rx="10" fill="#fffbeb" stroke="#b45309" stroke-opacity=".28"/>
+    <g transform="translate(137 1261)" style="color:#b45309"><circle class="icon" cx="6" cy="6" r="2"/><circle class="icon" cx="18" cy="18" r="2"/><circle class="icon" cx="18" cy="6" r="2"/><path class="icon" d="M8 6h8M8 7l8 9"/></g>
+    <rect x="182" y="1254" width="58" height="22" rx="11" fill="#b45309"/>
+    <text class="label" x="196" y="1269">1</text>
+    <text class="box-title" x="182" y="1294">GitHub Actions</text>
+    <text class="body" x="132" y="1322">Documented project capability</text>
   </g>
-  <g>
-    <rect x="500" y="1188" width="320" height="92" rx="8" fill="#fffbeb" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="500" y="1188" width="320" height="29" rx="8" fill="#b45309"/>
-    <path d="M500 1209 H820 V1217 H500 Z" fill="#b45309"/>
-    <text class="label" x="516" y="1208">2</text>
-    <text class="box-title" x="518" y="1246">GHCR images</text>
-    <text class="body" x="518" y="1272">Primary project capability</text>
+  <g filter="url(#shadow)">
+    <rect x="510" y="1228" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="510" y="1228" width="330" height="6" rx="3" fill="#b45309"/>
+    <rect x="528" y="1252" width="42" height="42" rx="10" fill="#fffbeb" stroke="#b45309" stroke-opacity=".28"/>
+    <g transform="translate(537 1261)" style="color:#b45309"><path class="icon" d="M3 8h18v10H3z"/><path class="icon" d="M6 8v10M10 8v10M14 8v10M18 8v10"/><path class="icon" d="M6 5h12v3H6z"/></g>
+    <rect x="582" y="1254" width="58" height="22" rx="11" fill="#b45309"/>
+    <text class="label" x="596" y="1269">2</text>
+    <text class="box-title" x="582" y="1294">GHCR images</text>
+    <text class="body" x="532" y="1322">Documented project capability</text>
   </g>
-  <g>
-    <rect x="890" y="1188" width="320" height="92" rx="8" fill="#fffbeb" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="890" y="1188" width="320" height="29" rx="8" fill="#b45309"/>
-    <path d="M890 1209 H1210 V1217 H890 Z" fill="#b45309"/>
-    <text class="label" x="906" y="1208">3</text>
-    <text class="box-title" x="908" y="1246">K8s overlays</text>
-    <text class="body" x="908" y="1272">Primary project capability</text>
+  <g filter="url(#shadow)">
+    <rect x="910" y="1228" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="910" y="1228" width="330" height="6" rx="3" fill="#b45309"/>
+    <rect x="928" y="1252" width="42" height="42" rx="10" fill="#fffbeb" stroke="#b45309" stroke-opacity=".28"/>
+    <g transform="translate(937 1261)" style="color:#b45309"><path class="icon" d="M12 15 9 12c1-5 4-8 10-9-1 6-4 9-9 10z"/><path class="icon" d="M9 12 5 13l3 3 1-4z"/><path class="icon" d="M12 15l-1 4 3-3-2-1z"/></g>
+    <rect x="982" y="1254" width="58" height="22" rx="11" fill="#b45309"/>
+    <text class="label" x="996" y="1269">3</text>
+    <text class="box-title" x="982" y="1294">K8s overlays</text>
+    <text class="body" x="932" y="1322">Documented project capability</text>
   </g>
-  <g>
-    <rect x="1280" y="1188" width="320" height="92" rx="8" fill="#fffbeb" stroke="#d8dee8" stroke-width="1.4"/>
-    <rect x="1280" y="1188" width="320" height="29" rx="8" fill="#b45309"/>
-    <path d="M1280 1209 H1600 V1217 H1280 Z" fill="#b45309"/>
-    <text class="label" x="1296" y="1208">4</text>
-    <text class="box-title" x="1298" y="1246">AWS EC2 fallback</text>
-    <text class="body" x="1298" y="1272">Primary project capability</text>
+  <g filter="url(#shadow)">
+    <rect x="1310" y="1228" width="330" height="112" rx="12" fill="#ffffff" stroke="#d5dce8" stroke-width="1.3"/>
+    <rect x="1310" y="1228" width="330" height="6" rx="3" fill="#b45309"/>
+    <rect x="1328" y="1252" width="42" height="42" rx="10" fill="#fffbeb" stroke="#b45309" stroke-opacity=".28"/>
+    <g transform="translate(1337 1261)" style="color:#b45309"><path class="icon" d="M7 17h10a5 5 0 0 0 .4-10 7 7 0 0 0-13 2.5A4 4 0 0 0 7 17z"/></g>
+    <rect x="1382" y="1254" width="58" height="22" rx="11" fill="#b45309"/>
+    <text class="label" x="1396" y="1269">4</text>
+    <text class="box-title" x="1382" y="1294">AWS EC2 fallback</text>
+    <text class="body" x="1332" y="1322">Documented project capability</text>
   </g>
-  <path class="arrow" d="M430 1234 L500 1234"/>
-  <path class="arrow" d="M820 1234 L890 1234"/>
-  <path class="arrow" d="M1210 1234 L1280 1234"/>
-  <path class="arrow-soft" d="M1490 585 L1490 640 L270 640"/>
-  <path class="arrow-soft" d="M1490 830 L1490 885 L270 885"/>
-  <path class="arrow-soft" d="M1490 1075 L1490 1130 L270 1130"/>
-  <text class="mono" x="86" y="1408">Ops commands: make docs | make demo-check | make k8s-render-dev | make k8s-render-prod</text>
+  <path class="arrow" d="M440 1284 L510 1284"/>
+  <path class="arrow" d="M840 1284 L910 1284"/>
+  <path class="arrow" d="M1240 1284 L1310 1284"/>
+  <path class="arrow-soft" d="M1510 575 L1510 660 L280 660"/>
+  <path class="arrow-soft" d="M1510 830 L1510 915 L280 915"/>
+  <path class="arrow-soft" d="M1510 1085 L1510 1170 L280 1170"/>
+  <text class="mono" x="86" y="1446">Ops commands: make docs | make demo-check | make k8s-render-dev | make k8s-render-prod</text>
 </svg>

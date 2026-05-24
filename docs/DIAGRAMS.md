@@ -1,8 +1,8 @@
 # Architecture Diagrams
 
 This folder contains the generated SVG architecture set for GenoPredict. The
-diagrams use one consistent visual system so they can be embedded in reports,
-slides, or the README without looking like unrelated screenshots.
+diagrams use one consistent icon-based visual system so they can be embedded in
+reports, slides, or the README without looking like unrelated screenshots.
 
 | Diagram | Purpose |
 | --- | --- |
