@@ -49,6 +49,10 @@ Tracked evidence includes:
 
 - MLflow training metrics and parameters
 - cross-validation outputs
+- model benchmark evidence comparing XGBoost, Random Forest, and Logistic
+  Regression in `docs/MODEL_BENCHMARK.md`
+- probability calibration metrics: Brier score, log loss, expected calibration
+  error, and calibration table artifact
 - PR-AUC promotion gate
 - SHAP bar and summary plots
 
@@ -67,6 +71,8 @@ Runtime monitoring includes:
 - Manual fallback inputs are simplified and cannot replace expert annotation.
 - The demo dataset and model governance are suitable for MLOps evaluation, not
   regulated clinical deployment.
+- Current validation uses random stratified splits; external, temporal, or
+  chromosome-aware validation should be added before making clinical claims.
 - Drift checks depend on enough recent prediction events to provide meaningful
   comparisons.
 

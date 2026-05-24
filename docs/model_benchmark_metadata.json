@@ -1,0 +1,7 @@
+{
+  "sample_size": 100000,
+  "ranking": [
+    "pr_auc",
+    "f1_score"
+  ]
+}

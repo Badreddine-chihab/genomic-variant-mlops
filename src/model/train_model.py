@@ -1,6 +1,5 @@
 import os
 import sys
-import numpy as np
 import pandas as pd
 import logging
 from pathlib import Path
@@ -10,43 +9,22 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-# Imports AFTER path fix
-import xgboost as xgb
 from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import (
-    average_precision_score, 
-    roc_auc_score, 
-    f1_score, 
-    precision_score, 
-    recall_score, 
-    accuracy_score
-)
 import mlflow
 import mlflow.xgboost
 from src.orchestration.config_utils import ConfigManager, setup_mlflow
 from src.features.schema_contract import CATEGORICAL_FEATURES, FEATURE_ORDER, enforce_feature_contract
+from src.model.metrics import (
+    calibration_table,
+    classification_metrics,
+    expected_calibration_error,
+    find_best_threshold,
+)
 
 # Logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-
-def find_best_threshold(y_true, y_probs, n_points=50):
-    thresholds = np.linspace(0.05, 0.95, n_points)
-    best_f1 = 0
-    best_thresh = 0.5
-
-    for t in thresholds:
-        y_pred = (y_probs >= t).astype(int)
-        f1 = f1_score(y_true, y_pred)
-
-        if f1 > best_f1:
-            best_f1 = f1
-            best_thresh = t
-
-    return best_thresh, best_f1
-
 
 def train_model():
     # 1. INIT CONFIG (ALIGN WITH OTHER SCRIPTS)
@@ -136,23 +114,16 @@ def train_model():
         )
 
         test_probs = model.predict_proba(X_test)[:, 1]
-        y_pred = (test_probs >= best_thresh).astype(int)
-
-        metrics = {
-            "pr_auc": average_precision_score(y_test, test_probs),
-            "roc_auc": roc_auc_score(y_test, test_probs),
-            "f1_score": f1_score(y_test, y_pred),
-            "precision": precision_score(y_test, y_pred),
-            "recall": recall_score(y_test, y_pred),
-            "accuracy": accuracy_score(y_test, y_pred),
-            "best_threshold": best_thresh
-        }
+        metrics = classification_metrics(y_test, test_probs, threshold=best_thresh)
+        calibration = calibration_table(y_test, test_probs)
+        metrics["expected_calibration_error"] = expected_calibration_error(calibration)
 
         mlflow.log_params(dict(xgb_cfg))
         mlflow.log_param("feature_schema_version", "v1")
         mlflow.log_param("feature_count", len(FEATURE_ORDER))
         mlflow.log_param("categorical_feature_count", len(CATEGORICAL_FEATURES))
         mlflow.log_metrics(metrics)
+        mlflow.log_table(calibration, artifact_file="evaluation/calibration_table.json")
 
         # ✅ CRITICAL FIX: correct URI format
         mlflow.xgboost.log_model(model, artifact_path="model")

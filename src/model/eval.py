@@ -7,7 +7,7 @@ import mlflow
 from pathlib import Path
 from xgboost import XGBClassifier
 from sklearn.model_selection import StratifiedKFold, cross_validate
-from sklearn.metrics import make_scorer, average_precision_score, roc_auc_score
+from sklearn.metrics import make_scorer, average_precision_score
 
 # Import du gestionnaire de configuration centralisé
 from src.orchestration.config_utils import ConfigManager, setup_mlflow
@@ -68,7 +68,8 @@ def evaluate_model_cv():
     scoring = {
         'roc_auc': 'roc_auc',
         'pr_auc': make_scorer(average_precision_score, response_method='predict_proba'),
-        'accuracy': 'accuracy'
+        'accuracy': 'accuracy',
+        'brier_score': 'neg_brier_score',
     }
 
     with mlflow.start_run(run_name=f"XGB_CV_{n_splits}Fold"):
@@ -88,6 +89,8 @@ def evaluate_model_cv():
         metrics_to_log = {}
         for metric_name in scoring.keys():
             scores = cv_results[f'test_{metric_name}']
+            if metric_name == "brier_score":
+                scores = -scores
             mean_s = scores.mean()
             std_s = scores.std()
             

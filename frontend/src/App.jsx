@@ -13,6 +13,7 @@ import {
 
 const CHROMS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y", "M"];
 const STORAGE_KEY = "genopredict_prediction_history_v2";
+const AUTH_KEY = "genopredict_demo_auth";
 const REVIEW_STATUSES = ["Needs review", "Reviewed", "Flagged", "Exported"];
 const DEMO_BATCH_RECORDS = [
   { chrom: "11", pos: "209271", ref: "C", alt: "A" },
@@ -35,6 +36,35 @@ const INITIAL_FORM = {
   alt_freq: ""
 };
 
+const ICONS = {
+  dashboard: "M4 13h7V4H4v9Zm9 7h7V4h-7v16ZM4 20h7v-5H4v5Z",
+  search: "m21 21-4.35-4.35M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4Z",
+  upload: "M12 3v12m0-12 4 4m-4-4-4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2",
+  activity: "M3 12h4l3-8 4 16 3-8h4",
+  brain: "M9 4a4 4 0 0 0-4 4 4 4 0 0 0 1 7.7A4 4 0 0 0 12 20V4a3 3 0 0 0-3-3Zm6 0a4 4 0 0 1 4 4 4 4 0 0 1-1 7.7A4 4 0 0 1 12 20V4a3 3 0 0 1 3-3Z",
+  shield: "M12 3 20 6v6c0 5-3.4 8-8 9-4.6-1-8-4-8-9V6l8-3Z",
+  file: "M6 3h8l4 4v14H6V3Zm8 0v5h5",
+  logOut: "M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3",
+  play: "M7 4v16l13-8L7 4Z",
+  refresh: "M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6",
+  download: "M12 3v12m0 0 4-4m-4 4-4-4M4 19h16",
+  print: "M7 8V3h10v5M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v7H7v-7Z",
+  alert: "M12 3 22 20H2L12 3Zm0 6v5m0 3h.01",
+  check: "M20 6 9 17l-5-5",
+  lock: "M6 10V7a6 6 0 0 1 12 0v3M5 10h14v11H5V10Z",
+  database: "M4 6c0-2 16-2 16 0v12c0 2-16 2-16 0V6Zm0 6c0 2 16 2 16 0M4 6c0 2 16 2 16 0",
+  dna: "M7 3c8 4 8 14 0 18M17 3c-8 4-8 14 0 18M8 7h8M8 12h8M8 17h8",
+  settings: "M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm8.5 4a7.8 7.8 0 0 0-.12-1.35l2.02-1.58-2-3.46-2.38.96a8 8 0 0 0-2.34-1.35L15.34 2h-4l-.34 3.22a8 8 0 0 0-2.34 1.35l-2.38-.96-2 3.46 2.02 1.58A8.4 8.4 0 0 0 6.18 12c0 .46.04.91.12 1.35l-2.02 1.58 2 3.46 2.38-.96a8 8 0 0 0 2.34 1.35l.34 3.22h4l.34-3.22a8 8 0 0 0 2.34-1.35l2.38.96 2-3.46-2.02-1.58c.08-.44.12-.89.12-1.35Z"
+};
+
+function Icon({ name, size = 20 }) {
+  return (
+    <svg className="ui-icon" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <path d={ICONS[name] || ICONS.dashboard} />
+    </svg>
+  );
+}
+
 function toNumber(value) {
   if (value === undefined || value === null || value === "") return null;
   const parsed = Number(value);
@@ -45,11 +75,29 @@ function labelFromPrediction(prediction) {
   return Number(prediction) === 1 ? "PATHOGENIC" : "BENIGN";
 }
 
+function pct(value, digits = 1) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "N/A";
+  return `${(Number(value) * 100).toFixed(digits)}%`;
+}
+
+function fmt(value, digits = 1) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "N/A";
+  return Number(value).toFixed(digits);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "N/A").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[char]));
+}
+
 function extractNumeric(row, candidates, fallback = "") {
   for (const key of candidates) {
-    if (row[key] !== undefined && row[key] !== null && row[key] !== "") {
-      return String(row[key]);
-    }
+    if (row[key] !== undefined && row[key] !== null && row[key] !== "") return String(row[key]);
   }
   return fallback;
 }
@@ -68,32 +116,21 @@ function normalizeFetchedRow(row, currentForm) {
 }
 
 function buildPredictionPayload(form) {
-  const base = {
+  const payload = {
     chrom: form.chrom,
     pos: String(form.pos).trim(),
     ref: String(form.ref).trim().toUpperCase(),
     alt: String(form.alt).trim().toUpperCase()
   };
-  const numeric = {
-    sift: toNumber(form.sift),
-    polyphen: toNumber(form.polyphen),
-    cadd: toNumber(form.cadd),
-    alt_freq: toNumber(form.alt_freq)
-  };
-
-  for (const [key, value] of Object.entries(numeric)) {
-    if (value !== null) base[key] = value;
+  for (const key of ["sift", "polyphen", "cadd", "alt_freq"]) {
+    const value = toNumber(form[key]);
+    if (value !== null) payload[key] = value;
   }
-  return base;
+  return payload;
 }
 
 function isManualSpecsComplete(form) {
-  return (
-    toNumber(form.sift) !== null &&
-    toNumber(form.polyphen) !== null &&
-    toNumber(form.cadd) !== null &&
-    toNumber(form.alt_freq) !== null
-  );
+  return ["sift", "polyphen", "cadd", "alt_freq"].every((key) => toNumber(form[key]) !== null);
 }
 
 function variantLabel(row) {
@@ -107,11 +144,12 @@ function confidenceBand(confidence) {
   return "Low";
 }
 
-function confidenceBadge(confidence) {
-  if (confidence === null || confidence === undefined) return "text-bg-secondary";
-  if (confidence >= 0.85) return "text-bg-success";
-  if (confidence >= 0.6) return "text-bg-warning";
-  return "text-bg-danger";
+function triageLabel(row) {
+  if (!row) return "Pending";
+  if (row.confidence < 0.6) return "Insufficient evidence";
+  if (row.label === "PATHOGENIC" && (row.probability ?? 0) >= 0.75) return "High priority";
+  if (row.label === "PATHOGENIC") return "Review priority";
+  return "Low priority";
 }
 
 function getFeatureDrivers(features = {}) {
@@ -153,7 +191,6 @@ function getFeatureDrivers(features = {}) {
       strength: Math.min(100, Math.max(8, polyphen * 100))
     });
   }
-
   return rows.sort((a, b) => b.strength - a.strength).slice(0, 4);
 }
 
@@ -161,14 +198,14 @@ function exportReviewReport(row, modelInfo) {
   if (!row) return;
   const features = row.features || {};
   const lines = [
-    "GenoPredict Variant Review Report",
+    "GenoPredict Variant Evidence Report",
     "",
     `Generated: ${new Date().toLocaleString()}`,
     `Variant: ${row.variant}`,
     `Prediction: ${row.label}`,
-    `Probability: ${row.probability !== null && row.probability !== undefined ? `${(row.probability * 100).toFixed(3)}%` : "N/A"}`,
-    `Confidence: ${row.confidence !== null && row.confidence !== undefined ? `${(row.confidence * 100).toFixed(3)}%` : "N/A"}`,
-    `Confidence band: ${confidenceBand(row.confidence)}`,
+    `Triage: ${triageLabel(row)}`,
+    `Probability: ${pct(row.probability, 3)}`,
+    `Confidence: ${pct(row.confidence, 3)}`,
     `Review status: ${row.reviewStatus || "Needs review"}`,
     `Source: ${row.source}`,
     "",
@@ -183,7 +220,7 @@ function exportReviewReport(row, modelInfo) {
     `CADD: ${features.cadd ?? "N/A"}`,
     `ALT_FREQ: ${features.alt_freq ?? "N/A"}`,
     "",
-    "Interpretation hints",
+    "Evidence drivers",
     ...getFeatureDrivers(features).map((driver) => `- ${driver.name}: ${driver.value} (${driver.direction})`),
     "",
     "Clinical note",
@@ -194,20 +231,13 @@ function exportReviewReport(row, modelInfo) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `genopredict_review_${row.variant.replace(/[^a-z0-9]+/gi, "_")}.txt`;
+  link.download = `genopredict_evidence_${row.variant.replace(/[^a-z0-9]+/gi, "_")}.txt`;
   link.click();
   URL.revokeObjectURL(url);
 }
 
 function printReviewReport(row, modelInfo) {
   if (!row) return;
-  const h = (value) => String(value ?? "N/A").replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  }[char]));
   const features = row.features || {};
   const drivers = getFeatureDrivers(features);
   const reportWindow = window.open("", "_blank", "noopener,noreferrer");
@@ -215,10 +245,10 @@ function printReviewReport(row, modelInfo) {
   reportWindow.document.write(`
     <html>
       <head>
-        <title>GenoPredict Review Report</title>
+        <title>GenoPredict Evidence Report</title>
         <style>
           body { font-family: Arial, sans-serif; color: #172033; margin: 32px; }
-          h1 { font-size: 22px; margin-bottom: 4px; }
+          h1 { font-size: 24px; margin-bottom: 4px; }
           h2 { font-size: 15px; margin-top: 24px; border-bottom: 1px solid #d8dee9; padding-bottom: 6px; }
           table { border-collapse: collapse; width: 100%; margin-top: 8px; }
           td, th { border: 1px solid #d8dee9; padding: 8px; text-align: left; font-size: 13px; }
@@ -227,34 +257,35 @@ function printReviewReport(row, modelInfo) {
         </style>
       </head>
       <body>
-        <h1>GenoPredict Variant Review Report</h1>
-        <div class="badge">${h(row.reviewStatus || "Needs review")}</div>
+        <h1>GenoPredict Variant Evidence Report</h1>
+        <div class="badge">${escapeHtml(row.reviewStatus || "Needs review")}</div>
         <h2>Variant Summary</h2>
         <table>
-          <tr><th>Variant</th><td>${h(row.variant)}</td></tr>
-          <tr><th>Prediction</th><td>${h(row.label)}</td></tr>
-          <tr><th>Probability</th><td>${row.probability !== null && row.probability !== undefined ? `${(row.probability * 100).toFixed(3)}%` : "N/A"}</td></tr>
-          <tr><th>Confidence</th><td>${row.confidence !== null && row.confidence !== undefined ? `${(row.confidence * 100).toFixed(3)}%` : "N/A"} (${confidenceBand(row.confidence)})</td></tr>
-          <tr><th>Source</th><td>${h(row.source)}</td></tr>
-          <tr><th>Timestamp</th><td>${h(row.timestamp)}</td></tr>
+          <tr><th>Variant</th><td>${escapeHtml(row.variant)}</td></tr>
+          <tr><th>Prediction</th><td>${escapeHtml(row.label)}</td></tr>
+          <tr><th>Triage</th><td>${escapeHtml(triageLabel(row))}</td></tr>
+          <tr><th>Probability</th><td>${pct(row.probability, 3)}</td></tr>
+          <tr><th>Confidence</th><td>${pct(row.confidence, 3)} (${confidenceBand(row.confidence)})</td></tr>
+          <tr><th>Source</th><td>${escapeHtml(row.source)}</td></tr>
+          <tr><th>Timestamp</th><td>${escapeHtml(row.timestamp)}</td></tr>
         </table>
         <h2>Feature Values</h2>
         <table>
-          <tr><th>SIFT</th><td>${h(features.sift)}</td></tr>
-          <tr><th>PolyPhen</th><td>${h(features.polyphen)}</td></tr>
-          <tr><th>CADD</th><td>${h(features.cadd)}</td></tr>
-          <tr><th>ALT_FREQ</th><td>${h(features.alt_freq)}</td></tr>
+          <tr><th>SIFT</th><td>${escapeHtml(features.sift)}</td></tr>
+          <tr><th>PolyPhen</th><td>${escapeHtml(features.polyphen)}</td></tr>
+          <tr><th>CADD</th><td>${escapeHtml(features.cadd)}</td></tr>
+          <tr><th>ALT_FREQ</th><td>${escapeHtml(features.alt_freq)}</td></tr>
         </table>
         <h2>Model Provenance</h2>
         <table>
-          <tr><th>Model</th><td>${h(modelInfo?.model_name || row.modelName || "unknown")}</td></tr>
-          <tr><th>Status</th><td>${h(modelInfo?.model_status || "unknown")}</td></tr>
-          <tr><th>Registry URI</th><td>${h(modelInfo?.model_uri || row.modelUri || "unknown")}</td></tr>
+          <tr><th>Model</th><td>${escapeHtml(modelInfo?.model_name || row.modelName || "unknown")}</td></tr>
+          <tr><th>Status</th><td>${escapeHtml(modelInfo?.model_status || "unknown")}</td></tr>
+          <tr><th>Registry URI</th><td>${escapeHtml(modelInfo?.model_uri || row.modelUri || "unknown")}</td></tr>
         </table>
-        <h2>Interpretation Hints</h2>
+        <h2>Evidence Drivers</h2>
         <table>
           <tr><th>Feature</th><th>Value</th><th>Direction</th></tr>
-          ${drivers.map((driver) => `<tr><td>${h(driver.name)}</td><td>${h(driver.value)}</td><td>${h(driver.direction)}</td></tr>`).join("")}
+          ${drivers.map((driver) => `<tr><td>${escapeHtml(driver.name)}</td><td>${escapeHtml(driver.value)}</td><td>${escapeHtml(driver.direction)}</td></tr>`).join("")}
         </table>
         <p class="note">This output is decision support only and should be reviewed by qualified laboratory staff.</p>
       </body>
@@ -267,12 +298,19 @@ function printReviewReport(row, modelInfo) {
 
 function exportHistoryCSV(history) {
   if (!history.length) return;
-  const headers = ["timestamp", "variant", "source", "review_status", "prediction", "probability_percent", "confidence_percent"];
+  const headers = ["timestamp", "variant", "source", "review_status", "prediction", "triage", "probability_percent", "confidence_percent"];
   const lines = [headers.join(",")];
   for (const row of history) {
-    const prob = row.probability === null || row.probability === undefined ? "" : (row.probability * 100).toFixed(3);
-    const conf = row.confidence === null || row.confidence === undefined ? "" : (row.confidence * 100).toFixed(3);
-    const cells = [row.timestamp, row.variant, row.source, row.reviewStatus || "Needs review", row.label, prob, conf];
+    const cells = [
+      row.timestamp,
+      row.variant,
+      row.source,
+      row.reviewStatus || "Needs review",
+      row.label,
+      triageLabel(row),
+      row.probability === null || row.probability === undefined ? "" : (row.probability * 100).toFixed(3),
+      row.confidence === null || row.confidence === undefined ? "" : (row.confidence * 100).toFixed(3)
+    ];
     lines.push(cells.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","));
   }
 
@@ -280,31 +318,14 @@ function exportHistoryCSV(history) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "genopredict_history.csv";
+  link.download = "genopredict_review_queue.csv";
   link.click();
   URL.revokeObjectURL(url);
 }
 
 function exportBatchReportCSV(summary, rows) {
   if (!rows.length) return;
-
-  const headers = [
-    "chrom",
-    "pos",
-    "ref",
-    "alt",
-    "status",
-    "prediction",
-    "label",
-    "probability_percent",
-    "confidence_percent",
-    "message",
-    "processed",
-    "predicted",
-    "not_found",
-    "failed"
-  ];
-
+  const headers = ["chrom", "pos", "ref", "alt", "status", "prediction", "label", "triage", "probability_percent", "confidence_percent", "message", "processed", "predicted", "not_found", "failed"];
   const lines = [headers.join(",")];
   for (const row of rows) {
     const values = [
@@ -315,6 +336,7 @@ function exportBatchReportCSV(summary, rows) {
       row.status,
       row.prediction ?? "",
       row.label ?? "",
+      row.label ? triageLabel({ label: row.label, probability: row.probability, confidence: row.confidence_score }) : "",
       row.probability !== null && row.probability !== undefined ? (row.probability * 100).toFixed(3) : "",
       row.confidence_score !== null && row.confidence_score !== undefined ? (row.confidence_score * 100).toFixed(3) : "",
       row.message ?? "",
@@ -325,7 +347,6 @@ function exportBatchReportCSV(summary, rows) {
     ];
     lines.push(values.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","));
   }
-
   const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -335,512 +356,325 @@ function exportBatchReportCSV(summary, rows) {
   URL.revokeObjectURL(url);
 }
 
-function PageOverview({
-  health,
-  modelInfo,
-  history,
-  visibleHistory,
-  dashboard,
-  historySearch,
-  setHistorySearch,
-  historyStatus,
-  setHistoryStatus,
-  onSetReviewStatus
-}) {
+function StatusPill({ tone = "neutral", children }) {
+  return <span className={`status-pill status-${tone}`}>{children}</span>;
+}
+
+function StatCard({ icon, label, value, subtext, tone = "blue" }) {
   return (
-    <div className="page-panel">
-      <div className="row g-3 mb-3">
-        <div className="col-xl-3 col-md-6">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <h6 className="text-secondary">Total Predictions</h6>
-              <h2 className="mb-0">{dashboard.total}</h2>
-            </div>
+    <section className="metric-card">
+      <div className={`metric-icon tone-${tone}`}><Icon name={icon} /></div>
+      <div>
+        <p className="metric-label">{label}</p>
+        <h3>{value}</h3>
+        {subtext && <p className="metric-subtext">{subtext}</p>}
+      </div>
+    </section>
+  );
+}
+
+function EmptyState({ icon = "file", title, text }) {
+  return (
+    <div className="empty-state">
+      <Icon name={icon} size={30} />
+      <h5>{title}</h5>
+      <p>{text}</p>
+    </div>
+  );
+}
+
+function LoginScreen({ onLogin }) {
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("admin");
+  const [error, setError] = useState("");
+
+  const submit = (event) => {
+    event.preventDefault();
+    if (username === "admin" && password === "admin") {
+      sessionStorage.setItem(AUTH_KEY, "true");
+      onLogin();
+      return;
+    }
+    setError("Invalid demo credentials.");
+  };
+
+  return (
+    <main className="login-screen">
+      <section className="login-visual">
+        <div className="brand-mark"><Icon name="dna" size={34} /></div>
+        <h1>GenoPredict</h1>
+        <p>Clinical variant prioritization workspace for model evidence, batch VCF review, and runtime monitoring.</p>
+        <div className="login-proof">
+          <span><Icon name="shield" /> Demo access</span>
+          <span><Icon name="brain" /> XGBoost evidence model</span>
+          <span><Icon name="activity" /> Drift-aware operations</span>
+        </div>
+      </section>
+      <form className="login-panel" onSubmit={submit}>
+        <div className="login-lock"><Icon name="lock" size={28} /></div>
+        <h2>Sign in</h2>
+        <p>Use the demo account to open the lab console.</p>
+        <label>
+          Username
+          <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
+        </label>
+        <label>
+          Password
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+        </label>
+        {error && <div className="form-error">{error}</div>}
+        <button className="btn-primary-modern" type="submit">
+          <Icon name="play" /> Enter workspace
+        </button>
+        <p className="demo-note">Demo credentials: admin / admin</p>
+      </form>
+    </main>
+  );
+}
+
+function AppShell({ page, setPage, health, modelInfo, history, onLogout, children, onExportHistory, onClearHistory }) {
+  const navItems = [
+    ["overview", "dashboard", "Dashboard"],
+    ["predict", "search", "Variant"],
+    ["vcf", "upload", "VCF Lab"],
+    ["monitoring", "activity", "Monitoring"],
+    ["evidence", "brain", "Evidence"]
+  ];
+  const modelLoaded = ["loaded", "loaded_local_fallback"].includes(modelInfo?.model_status || health?.model_status);
+
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <div className="brand-mark small"><Icon name="dna" size={25} /></div>
+          <div>
+            <strong>GenoPredict</strong>
+            <span>Variant review</span>
           </div>
         </div>
-        <div className="col-xl-3 col-md-6">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <h6 className="text-secondary">Pathogenic Rate</h6>
-              <h2 className="mb-2">{dashboard.pathogenicRate.toFixed(1)}%</h2>
-              <div className="progress">
-                <div className="progress-bar bg-danger" style={{ width: `${dashboard.pathogenicRate}%` }} />
-              </div>
-            </div>
-          </div>
+        <nav className="side-nav">
+          {navItems.map(([key, icon, label]) => (
+            <button key={key} className={page === key ? "active" : ""} onClick={() => setPage(key)} title={label}>
+              <Icon name={icon} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <button onClick={onExportHistory} disabled={!history.length}><Icon name="download" /> Export queue</button>
+          <button onClick={onClearHistory} disabled={!history.length}><Icon name="alert" /> Clear queue</button>
+          <button onClick={onLogout}><Icon name="logOut" /> Sign out</button>
         </div>
-        <div className="col-xl-3 col-md-6">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <h6 className="text-secondary">Avg Probability</h6>
-              <h2 className="mb-0">{dashboard.avgProbability.toFixed(1)}%</h2>
-            </div>
+      </aside>
+
+      <main className="workspace">
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">Clinical decision-support demo</p>
+            <h1>{navItems.find(([key]) => key === page)?.[2] || "Dashboard"}</h1>
           </div>
-        </div>
-        <div className="col-xl-3 col-md-6">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <h6 className="text-secondary">Model Status</h6>
-              <h2 className={`mb-0 ${health?.model_status === "loaded" ? "text-success" : "text-warning"}`}>
-                {health?.model_status || "unknown"}
-              </h2>
-            </div>
+          <div className="topbar-status">
+            <StatusPill tone={health?.api_status === "healthy" ? "green" : "amber"}>API {health?.api_status || "unknown"}</StatusPill>
+            <StatusPill tone={modelLoaded ? "green" : "amber"}>Model {modelInfo?.model_status || health?.model_status || "unknown"}</StatusPill>
           </div>
+        </header>
+        {children}
+      </main>
+    </div>
+  );
+}
+
+function PageOverview({ health, modelInfo, history, visibleHistory, dashboard, historySearch, setHistorySearch, historyStatus, setHistoryStatus, onSetReviewStatus, onOpenPredict }) {
+  const reviewCounts = REVIEW_STATUSES.map((status) => ({
+    status,
+    count: history.filter((row) => (row.reviewStatus || "Needs review") === status).length
+  }));
+
+  return (
+    <div className="view-stack">
+      <section className="hero-band">
+        <div>
+          <p className="eyebrow">Operational variant triage</p>
+          <h2>Review predictions with evidence, provenance, and monitoring in one place.</h2>
+          <p>Use this console to prioritize variants, export evidence reports, and keep model behavior observable.</p>
         </div>
+        <button className="btn-primary-modern" onClick={onOpenPredict}><Icon name="search" /> New prediction</button>
+      </section>
+
+      <div className="metric-grid">
+        <StatCard icon="file" label="Review queue" value={dashboard.total} subtext={`${dashboard.pathogenic} pathogenic predictions`} tone="blue" />
+        <StatCard icon="activity" label="Pathogenic rate" value={`${dashboard.pathogenicRate.toFixed(1)}%`} subtext="Local review history" tone="red" />
+        <StatCard icon="brain" label="Average probability" value={`${dashboard.avgProbability.toFixed(1)}%`} subtext="Predicted cases only" tone="violet" />
+        <StatCard icon="shield" label="Model status" value={health?.model_status || "unknown"} subtext={modelInfo?.model_name || "GenomicVariantModel"} tone="green" />
       </div>
 
-      <div className="row g-3 mb-3">
-        <div className="col-xl-8">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <div className="d-flex flex-wrap justify-content-between gap-3 align-items-center">
-                <div>
-                  <h5 className="mb-1">Lab Review Queue</h5>
-                  <p className="text-secondary mb-0">Track predictions that need review, have been flagged, or are ready for export.</p>
-                </div>
-                <div className="d-flex gap-2">
-                  {REVIEW_STATUSES.map((status) => (
-                    <span key={status} className="badge text-bg-light border">
-                      {status}: {history.filter((row) => (row.reviewStatus || "Needs review") === status).length}
-                    </span>
-                  ))}
-                </div>
-              </div>
+      <section className="content-grid two-one">
+        <div className="panel">
+          <div className="panel-head">
+            <div>
+              <h3>Lab Review Queue</h3>
+              <p>Filter, assign review status, and export records for follow-up.</p>
             </div>
+            <StatusPill>{visibleHistory.length} shown</StatusPill>
           </div>
-        </div>
-        <div className="col-xl-4">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <h6 className="text-secondary">Production Provenance</h6>
-              <div className="d-flex flex-wrap gap-2 mb-2">
-                <span className={`badge ${modelInfo?.model_status === "loaded" ? "text-bg-success" : "text-bg-warning"}`}>
-                  {modelInfo?.model_status || "unknown"}
-                </span>
-                <span className="badge text-bg-primary">Production</span>
-                <span className="badge text-bg-light border">{modelInfo?.input_features?.length || 0} features</span>
-              </div>
-              <p className="small text-secondary mb-0 text-break">{modelInfo?.model_uri || "Model URI unavailable"}</p>
-            </div>
+          <div className="filter-row">
+            <input placeholder="Search variant, source, or label" value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} />
+            <select value={historyStatus} onChange={(e) => setHistoryStatus(e.target.value)}>
+              <option value="all">All review statuses</option>
+              {REVIEW_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+            </select>
           </div>
-        </div>
-      </div>
-
-      <div className="row g-3">
-        <div className="col-xl-8">
-          <div className="card shadow-sm border-0">
-            <div className="card-header bg-white border-0 py-3">
-              <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
-                <h5 className="mb-0">Recent Predictions</h5>
-                <span className="badge text-bg-light">{visibleHistory.length} shown / {history.length} stored</span>
-              </div>
-              <div className="row g-2 mt-2">
-                <div className="col-md-8">
-                  <input
-                    className="form-control form-control-sm"
-                    placeholder="Search variant, source, or prediction"
-                    value={historySearch}
-                    onChange={(e) => setHistorySearch(e.target.value)}
-                  />
-                </div>
-                <div className="col-md-4">
-                  <select className="form-select form-select-sm" value={historyStatus} onChange={(e) => setHistoryStatus(e.target.value)}>
-                    <option value="all">All review statuses</option>
-                    {REVIEW_STATUSES.map((status) => (
-                      <option key={status} value={status}>{status}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-            <div className="table-responsive">
-              <table className="table table-striped table-hover mb-0 align-middle">
-                <thead className="table-light">
-                  <tr>
-                    <th>Time</th>
-                    <th>Variant</th>
-                    <th>Source</th>
-                    <th>Prediction</th>
-                    <th>Probability</th>
-                    <th>Review</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleHistory.length === 0 ? (
-                    <tr>
-                      <td colSpan="6" className="text-center text-secondary py-4">
-                        No predictions yet.
+          <div className="table-wrap">
+            <table className="modern-table">
+              <thead>
+                <tr>
+                  <th>Variant</th>
+                  <th>Prediction</th>
+                  <th>Triage</th>
+                  <th>Probability</th>
+                  <th>Review</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleHistory.length === 0 ? (
+                  <tr><td colSpan="5"><EmptyState title="No predictions yet" text="Run a single variant or VCF batch to start the review queue." /></td></tr>
+                ) : (
+                  visibleHistory.slice(0, 12).map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        <strong>{row.variant}</strong>
+                        <span>{row.source} | {row.timestamp}</span>
+                      </td>
+                      <td><StatusPill tone={row.label === "PATHOGENIC" ? "red" : "green"}>{row.label}</StatusPill></td>
+                      <td>{triageLabel(row)}</td>
+                      <td>{pct(row.probability, 1)}</td>
+                      <td>
+                        <select value={row.reviewStatus || "Needs review"} onChange={(e) => onSetReviewStatus(row.id, e.target.value)}>
+                          {REVIEW_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+                        </select>
                       </td>
                     </tr>
-                  ) : (
-                    visibleHistory.slice(0, 10).map((row) => (
-                      <tr key={row.id}>
-                        <td>{row.timestamp}</td>
-                        <td>{row.variant}</td>
-                        <td>{row.source}</td>
-                        <td>
-                          <span className={`badge ${row.label === "PATHOGENIC" ? "text-bg-danger" : "text-bg-success"}`}>
-                            {row.label}
-                          </span>
-                        </td>
-                        <td>{row.probability !== null ? `${(row.probability * 100).toFixed(1)}%` : "N/A"}</td>
-                        <td>
-                          <select
-                            className="form-select form-select-sm review-select"
-                            value={row.reviewStatus || "Needs review"}
-                            onChange={(e) => onSetReviewStatus(row.id, e.target.value)}
-                          >
-                            {REVIEW_STATUSES.map((status) => (
-                              <option key={status} value={status}>{status}</option>
-                            ))}
-                          </select>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        <div className="col-xl-4">
-          <div className="card shadow-sm border-0 mb-3">
-            <div className="card-header bg-white border-0 py-3">
-              <h5 className="mb-0">Top Chromosomes</h5>
-            </div>
-            <div className="card-body">
-              {dashboard.byChrom.length === 0 ? (
-                <p className="text-secondary mb-0">No data yet.</p>
-              ) : (
-                dashboard.byChrom.map(([chrom, count]) => {
-                  const width = dashboard.total ? (count / dashboard.total) * 100 : 0;
-                  return (
-                    <div key={chrom} className="mb-2">
-                      <div className="d-flex justify-content-between small">
-                        <span>Chr {chrom}</span>
-                        <span>{count}</span>
-                      </div>
-                      <div className="progress">
-                        <div className="progress-bar" style={{ width: `${width}%` }} />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+        <aside className="panel">
+          <div className="panel-head">
+            <div>
+              <h3>Queue Summary</h3>
+              <p>Current local review state.</p>
             </div>
           </div>
-
-          <div className="card shadow-sm border-0">
-            <div className="card-header bg-white border-0 py-3">
-              <h5 className="mb-0">System Snapshot</h5>
-            </div>
-            <div className="card-body">
-              <p className="mb-2"><span className="fw-semibold">API:</span> {health?.api_status || "unknown"}</p>
-              <p className="mb-2"><span className="fw-semibold">Model:</span> {modelInfo?.model_name || "unknown"}</p>
-              <p className="mb-2"><span className="fw-semibold">Registry URI:</span> {modelInfo?.model_uri || "not loaded"}</p>
-              <p className="mb-0"><span className="fw-semibold">Feature Count:</span> {modelInfo?.input_features?.length || 0}</p>
-            </div>
+          <div className="review-list">
+            {reviewCounts.map((item) => (
+              <div key={item.status}>
+                <span>{item.status}</span>
+                <strong>{item.count}</strong>
+              </div>
+            ))}
           </div>
-        </div>
-      </div>
+          <div className="divider" />
+          <h4>Model provenance</h4>
+          <p className="small-copy text-break">{modelInfo?.model_uri || "Model URI unavailable"}</p>
+          <div className="mini-tags">
+            <StatusPill tone="blue">{modelInfo?.input_features?.length || 0} features</StatusPill>
+            <StatusPill tone="green">{modelInfo?.model_status || "unknown"}</StatusPill>
+          </div>
+        </aside>
+      </section>
     </div>
   );
 }
 
-function PageExplainability({ modelInfo }) {
-  const features = modelInfo?.input_features || [];
-
-  return (
-    <div className="page-panel">
-      <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-        <div>
-          <h4 className="mb-1">Model Explainability</h4>
-          <p className="text-secondary mb-0">SHAP artifacts and the production model feature contract.</p>
-        </div>
-        <div className="d-flex flex-wrap gap-2">
-          <span className={`badge ${modelInfo?.model_status === "loaded" ? "text-bg-success" : "text-bg-warning"}`}>
-            {modelInfo?.model_status || "unknown"}
-          </span>
-          <span className="badge text-bg-light border">{features.length} features</span>
-        </div>
-      </div>
-
-      <div className="row g-3 mb-3">
-        <div className="col-xl-6">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-header bg-white border-0 py-3">
-              <h5 className="mb-0">SHAP Feature Importance</h5>
-            </div>
-            <div className="card-body">
-              <img
-                className="explainability-plot"
-                src="/figures/shap_bar_plot.png"
-                alt="SHAP bar plot showing global feature importance"
-              />
-            </div>
-          </div>
-        </div>
-        <div className="col-xl-6">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-header bg-white border-0 py-3">
-              <h5 className="mb-0">SHAP Summary</h5>
-            </div>
-            <div className="card-body">
-              <img
-                className="explainability-plot explainability-plot-tall"
-                src="/figures/shap_summary_plot.png"
-                alt="SHAP summary plot showing feature effects across samples"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="card shadow-sm border-0">
-        <div className="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-          <h5 className="mb-0">Model Input Features</h5>
-          <span className="badge text-bg-light">{features.length}</span>
-        </div>
-        <div className="card-body">
-          {features.length === 0 ? (
-            <p className="text-secondary mb-0">Feature metadata is not available yet.</p>
-          ) : (
-            <div className="feature-chip-grid">
-              {features.map((feature, idx) => (
-                <span key={feature} className="feature-chip">
-                  <span className="text-secondary">{idx + 1}</span>
-                  {feature}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PagePredict({
-  form,
-  setForm,
-  modelInfo,
-  lookupStatus,
-  lookupMessage,
-  lookupLoading,
-  predictLoading,
-  fetchedRow,
-  lastPrediction,
-  onLookup,
-  onPredict,
-  onLoadDemoVariant,
-  onReset
-}) {
+function PagePredict({ form, setForm, modelInfo, lookupStatus, lookupMessage, lookupLoading, predictLoading, fetchedRow, lastPrediction, onLookup, onPredict, onLoadDemoVariant, onReset }) {
   const drivers = getFeatureDrivers(lastPrediction?.features || form);
   const modelFallback = modelInfo?.model_status === "loaded_local_fallback";
 
   return (
-    <div className="page-panel">
-      <div className="row g-3">
-        <div className="col-xl-8">
-          <div className="card shadow-sm border-0">
-            <div className="card-header bg-white border-0 py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
-              <h5 className="mb-0">Variant Prediction Workbench</h5>
-              <button className="btn btn-sm btn-outline-primary" onClick={onLoadDemoVariant}>
-                Load Demo Variant
-              </button>
-            </div>
-            <div className="card-body">
-              {modelFallback && (
-                <div className="alert alert-warning py-2">
-                  Model is running from local fallback. Registry provenance should be checked before reporting.
-                </div>
-              )}
-              <div className="row g-2">
-                <div className="col-md-2">
-                  <label className="form-label">Chrom</label>
-                  <select className="form-select" value={form.chrom} onChange={(e) => setForm((s) => ({ ...s, chrom: e.target.value }))}>
-                    {CHROMS.map((chrom) => (
-                      <option key={chrom} value={chrom}>{chrom}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-md-3">
-                  <label className="form-label">Position</label>
-                  <input className="form-control" value={form.pos} onChange={(e) => setForm((s) => ({ ...s, pos: e.target.value }))} />
-                </div>
-                <div className="col-md-2">
-                  <label className="form-label">REF</label>
-                  <input className="form-control text-uppercase" value={form.ref} onChange={(e) => setForm((s) => ({ ...s, ref: e.target.value }))} />
-                </div>
-                <div className="col-md-2">
-                  <label className="form-label">ALT</label>
-                  <input className="form-control text-uppercase" value={form.alt} onChange={(e) => setForm((s) => ({ ...s, alt: e.target.value }))} />
-                </div>
-                <div className="col-md-3 d-flex align-items-end">
-                  <button className="btn btn-outline-primary w-100" onClick={onLookup} disabled={lookupLoading}>
-                    {lookupLoading ? "Searching..." : "Lookup Feature Store"}
-                  </button>
-                </div>
-              </div>
+    <div className="content-grid predict-grid">
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <h3>Single Variant Workbench</h3>
+            <p>Resolve feature-store evidence first, then score the variant and export an evidence report.</p>
+          </div>
+          <button className="icon-button" onClick={onLoadDemoVariant} title="Load demo variant"><Icon name="database" /></button>
+        </div>
+        {modelFallback && <div className="inline-warning"><Icon name="alert" /> Model is running from local fallback. Check registry provenance before reporting.</div>}
 
-              <div className="mt-3">
-                {lookupStatus === "found" && <div className="alert alert-success py-2 mb-0">Variant found in database. Manual specs are optional.</div>}
-                {lookupStatus === "not_found" && <div className="alert alert-warning py-2 mb-0">Variant not found. Please fill all manual specs before prediction.</div>}
-                {lookupStatus === "error" && <div className="alert alert-danger py-2 mb-0">{lookupMessage}</div>}
-                {lookupStatus === "idle" && !isManualSpecsComplete(form) && (
-                  <div className="alert alert-light border py-2 mb-0">
-                    Lookup fills lab features automatically. Manual prediction is available once all four feature values are present.
-                  </div>
-                )}
-              </div>
+        <div className="form-section">
+          <h4>Variant identity</h4>
+          <div className="form-grid identity-grid">
+            <label>Chrom<select value={form.chrom} onChange={(e) => setForm((s) => ({ ...s, chrom: e.target.value }))}>{CHROMS.map((chrom) => <option key={chrom} value={chrom}>{chrom}</option>)}</select></label>
+            <label>Position<input value={form.pos} onChange={(e) => setForm((s) => ({ ...s, pos: e.target.value }))} /></label>
+            <label>REF<input value={form.ref} onChange={(e) => setForm((s) => ({ ...s, ref: e.target.value.toUpperCase() }))} /></label>
+            <label>ALT<input value={form.alt} onChange={(e) => setForm((s) => ({ ...s, alt: e.target.value.toUpperCase() }))} /></label>
+            <button className="btn-secondary-modern" onClick={onLookup} disabled={lookupLoading}><Icon name="search" /> {lookupLoading ? "Searching" : "Lookup"}</button>
+          </div>
+          {lookupStatus === "found" && <div className="inline-success"><Icon name="check" /> Variant found in feature store. Manual evidence was filled automatically.</div>}
+          {lookupStatus === "not_found" && <div className="inline-warning"><Icon name="alert" /> Variant not found. Fill all annotation values before scoring.</div>}
+          {lookupStatus === "error" && <div className="inline-error">{lookupMessage}</div>}
+        </div>
 
-              <hr />
-
-              <div className="row g-2">
-                <div className="col-md-3">
-                  <label className="form-label">SIFT</label>
-                  <input
-                    className="form-control"
-                    type="number"
-                    min="0"
-                    max="1"
-                    step="0.001"
-                    value={form.sift}
-                    onChange={(e) => setForm((s) => ({ ...s, sift: e.target.value }))}
-                  />
-                </div>
-                <div className="col-md-3">
-                  <label className="form-label">PolyPhen</label>
-                  <input
-                    className="form-control"
-                    type="number"
-                    min="0"
-                    max="1"
-                    step="0.001"
-                    value={form.polyphen}
-                    onChange={(e) => setForm((s) => ({ ...s, polyphen: e.target.value }))}
-                  />
-                </div>
-                <div className="col-md-3">
-                  <label className="form-label">CADD</label>
-                  <input
-                    className="form-control"
-                    type="number"
-                    min="0"
-                    max="60"
-                    step="0.1"
-                    value={form.cadd}
-                    onChange={(e) => setForm((s) => ({ ...s, cadd: e.target.value }))}
-                  />
-                </div>
-                <div className="col-md-3">
-                  <label className="form-label">ALT Freq</label>
-                  <input
-                    className="form-control"
-                    type="number"
-                    min="0"
-                    max="1"
-                    step="0.000001"
-                    value={form.alt_freq}
-                    onChange={(e) => setForm((s) => ({ ...s, alt_freq: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <div className="d-flex gap-2 mt-3">
-                <button className="btn btn-success" onClick={onPredict} disabled={predictLoading}>
-                  {predictLoading ? "Predicting..." : "Run Prediction"}
-                </button>
-                <button className="btn btn-outline-secondary" onClick={onReset}>
-                  Reset
-                </button>
-              </div>
-            </div>
+        <div className="form-section">
+          <h4>Annotation evidence</h4>
+          <div className="form-grid evidence-grid">
+            <label>SIFT<input type="number" min="0" max="1" step="0.001" value={form.sift} onChange={(e) => setForm((s) => ({ ...s, sift: e.target.value }))} /></label>
+            <label>PolyPhen<input type="number" min="0" max="1" step="0.001" value={form.polyphen} onChange={(e) => setForm((s) => ({ ...s, polyphen: e.target.value }))} /></label>
+            <label>CADD<input type="number" min="0" max="60" step="0.1" value={form.cadd} onChange={(e) => setForm((s) => ({ ...s, cadd: e.target.value }))} /></label>
+            <label>ALT frequency<input type="number" min="0" max="1" step="0.000001" value={form.alt_freq} onChange={(e) => setForm((s) => ({ ...s, alt_freq: e.target.value }))} /></label>
           </div>
         </div>
 
-        <div className="col-xl-4">
-          <div className="card shadow-sm border-0 mb-3">
-            <div className="card-header bg-white border-0 py-3">
-              <h5 className="mb-0">Latest Result</h5>
-            </div>
-            <div className="card-body">
-              {!lastPrediction ? (
-                <p className="text-secondary mb-0">Run a prediction to see output.</p>
-              ) : (
-                <>
-                  <div className="d-flex justify-content-between align-items-start gap-2">
-                    <div>
-                      <h4 className={lastPrediction.label === "PATHOGENIC" ? "text-danger" : "text-success"}>
-                        {lastPrediction.label}
-                      </h4>
-                      <p className="mb-2 fw-semibold">{lastPrediction.variant}</p>
-                    </div>
-                    <span className={`badge ${confidenceBadge(lastPrediction.confidence)}`}>
-                      {confidenceBand(lastPrediction.confidence)} confidence
-                    </span>
-                  </div>
-                  <p className="mb-1">Probability: {lastPrediction.probability !== null ? `${(lastPrediction.probability * 100).toFixed(2)}%` : "N/A"}</p>
-                  <p className="mb-1">Confidence: {(lastPrediction.confidence * 100).toFixed(2)}%</p>
-                  <p className="mb-2 text-secondary">Source: {lastPrediction.source}</p>
-                  {lastPrediction.confidence < 0.6 && (
-                    <div className="alert alert-warning py-2 small">
-                      Low confidence prediction. Review feature completeness before reporting.
-                    </div>
-                  )}
-                  <div className="d-grid gap-2">
-                    <button className="btn btn-sm btn-outline-primary" onClick={() => printReviewReport(lastPrediction, modelInfo)}>
-                      Print / Save PDF
-                    </button>
-                    <button className="btn btn-sm btn-outline-secondary" onClick={() => exportReviewReport(lastPrediction, modelInfo)}>
-                      Export Text Report
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="card shadow-sm border-0 mb-3">
-            <div className="card-header bg-white border-0 py-3">
-              <h5 className="mb-0">Prediction Drivers</h5>
-            </div>
-            <div className="card-body">
-              {drivers.length === 0 ? (
-                <p className="text-secondary mb-0">Feature values will appear after lookup or manual entry.</p>
-              ) : (
-                drivers.map((driver) => (
-                  <div key={driver.name} className="mb-3">
-                    <div className="d-flex justify-content-between small mb-1">
-                      <span className="fw-semibold">{driver.name}</span>
-                      <span>{driver.value} · {driver.direction}</span>
-                    </div>
-                    <div className="progress driver-progress">
-                      <div className="progress-bar" style={{ width: `${driver.strength}%` }} />
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {fetchedRow && (
-            <div className="card shadow-sm border-0">
-              <div className="card-header bg-white border-0 py-3">
-                <h5 className="mb-0">Fetched Record Preview</h5>
-              </div>
-              <div className="card-body">
-                <div className="small">
-                  <div><span className="text-secondary">Variant:</span> {String(fetchedRow["#chr"] ?? fetchedRow.CHROM)}:{String(fetchedRow["pos(1-based)"] ?? fetchedRow.POS)}</div>
-                  <div><span className="text-secondary">REF/ALT:</span> {String(fetchedRow.ref ?? fetchedRow.REF)} / {String(fetchedRow.alt ?? fetchedRow.ALT)}</div>
-                  <div><span className="text-secondary">CADD:</span> {String(fetchedRow.CADD_phred ?? fetchedRow.CADD ?? "N/A")}</div>
-                </div>
-              </div>
-            </div>
-          )}
+        <div className="action-row">
+          <button className="btn-primary-modern" onClick={onPredict} disabled={predictLoading}><Icon name="play" /> {predictLoading ? "Scoring" : "Run prediction"}</button>
+          <button className="btn-ghost-modern" onClick={onReset}><Icon name="refresh" /> Reset</button>
         </div>
-      </div>
+      </section>
+
+      <aside className="panel result-panel">
+        <div className="panel-head">
+          <div>
+            <h3>Evidence Report</h3>
+            <p>Professional review output for the latest prediction.</p>
+          </div>
+        </div>
+        {!lastPrediction ? (
+          <EmptyState icon="file" title="No result yet" text="Score a variant to generate a triage summary and exportable evidence report." />
+        ) : (
+          <div className="result-card">
+            <StatusPill tone={lastPrediction.label === "PATHOGENIC" ? "red" : "green"}>{lastPrediction.label}</StatusPill>
+            <h2>{pct(lastPrediction.probability, 2)}</h2>
+            <p>{lastPrediction.variant}</p>
+            <div className="triage-box">
+              <span>Triage</span>
+              <strong>{triageLabel(lastPrediction)}</strong>
+            </div>
+            <div className="evidence-bars">
+              {drivers.map((driver) => (
+                <div key={driver.name}>
+                  <div><strong>{driver.name}</strong><span>{driver.value} | {driver.direction}</span></div>
+                  <div className="bar"><span style={{ width: `${driver.strength}%` }} /></div>
+                </div>
+              ))}
+            </div>
+            {lastPrediction.confidence < 0.6 && <div className="inline-warning"><Icon name="alert" /> Low confidence. Review feature completeness.</div>}
+            <div className="action-row stacked">
+              <button className="btn-secondary-modern" onClick={() => printReviewReport(lastPrediction, modelInfo)}><Icon name="print" /> Print / save PDF</button>
+              <button className="btn-ghost-modern" onClick={() => exportReviewReport(lastPrediction, modelInfo)}><Icon name="download" /> Export text report</button>
+            </div>
+          </div>
+        )}
+        {fetchedRow && (
+          <div className="fetched-preview">
+            <h4>Fetched record</h4>
+            <p>{String(fetchedRow["#chr"] ?? fetchedRow.CHROM)}:{String(fetchedRow["pos(1-based)"] ?? fetchedRow.POS)} {String(fetchedRow.ref ?? fetchedRow.REF)}&gt;{String(fetchedRow.alt ?? fetchedRow.ALT)}</p>
+          </div>
+        )}
+      </aside>
     </div>
   );
 }
@@ -893,9 +727,7 @@ function PageVcf({ onSelectVariant, onBatchResults }) {
       setRecords(response.records || []);
       setBatchResults([]);
       setBatchSummary(null);
-      if (!response.records?.length) {
-        setError(response.message || "No records parsed from file.");
-      }
+      if (!response.records?.length) setError(response.message || "No records parsed from file.");
     } catch (e) {
       setError(e.message);
     } finally {
@@ -912,14 +744,15 @@ function PageVcf({ onSelectVariant, onBatchResults }) {
     setBatchLoading(true);
     try {
       const response = await predictVcfBatch(records, limit);
-      setBatchSummary({
+      const summary = {
         processed: response.processed,
         predicted: response.predicted,
         notFound: response.not_found,
         failed: response.failed
-      });
+      };
+      setBatchSummary(summary);
       setBatchResults(response.results || []);
-      if (onBatchResults) onBatchResults(response.results || []);
+      onBatchResults?.(response.results || []);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -936,214 +769,109 @@ function PageVcf({ onSelectVariant, onBatchResults }) {
   };
 
   return (
-    <div className="page-panel">
-      <div className="card shadow-sm border-0 mb-3">
-        <div className="card-header bg-white border-0 py-3">
-          <h5 className="mb-0">VCF Upload Lab</h5>
-        </div>
-        <div className="card-body">
-          <p className="text-secondary mb-3">
-            Upload a clinical `.vcf` file, preview parsed variants, then send one directly to Predict page.
-            Sample files: <code>data/examples/example_variants.vcf</code> and <code>data/examples/lab_demo_batch.vcf</code>.
-          </p>
-          <div className="row g-2">
-            <div className="col-md-8">
-              <input
-                className="form-control"
-                type="file"
-                accept=".vcf,.vcf.gz"
-                onChange={(e) => setVcfFile(e.target.files?.[0] || null)}
-              />
-            </div>
-            <div className="col-md-2">
-              <label className="form-label mb-1 small text-muted">Max records</label>
-              <input
-                className="form-control"
-                type="number"
-                min="1"
-                max="5000"
-                value={limit}
-                onChange={(e) => setLimit(Math.max(1, Math.min(5000, Number(e.target.value) || 1)))}
-              />
-            </div>
-            <div className="col-md-2">
-              <label className="form-label mb-1 small text-muted">Parse file</label>
-              <button className="btn btn-primary w-100" onClick={handleUpload} disabled={loading}>
-                {loading ? "Parsing..." : "Parse VCF"}
-              </button>
-            </div>
-            <div className="col-md-12">
-              <p className="small text-secondary mb-2">
-                The number above sets how many VCF variants are parsed and sent to batch prediction.
-              </p>
-              <div className="d-flex flex-wrap gap-2">
-                <button className="btn btn-outline-primary flex-fill" onClick={handleLoadDemoBatch}>
-                  Load Demo Batch
-                </button>
-                <button className="btn btn-success flex-fill" onClick={handleBatchPredict} disabled={batchLoading || !records.length}>
-                  {batchLoading ? "Running Batch Prediction..." : "Run Batch Prediction"}
-                </button>
-              </div>
-            </div>
+    <div className="view-stack">
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <h3>VCF Batch Review</h3>
+            <p>Upload, preview, score, filter, and export a variant review report.</p>
           </div>
-          {error && <div className="alert alert-danger py-2 mt-3 mb-0">{error}</div>}
-          {batchSummary && (
-            <div className="alert alert-info py-2 mt-3 mb-0">
-              Processed: {batchSummary.processed} | Predicted: {batchSummary.predicted} | Not Found: {batchSummary.notFound} | Failed: {batchSummary.failed}
-            </div>
-          )}
+          <button className="btn-secondary-modern" onClick={handleLoadDemoBatch}><Icon name="database" /> Demo batch</button>
         </div>
-      </div>
+        <div className="upload-zone">
+          <Icon name="upload" size={34} />
+          <div>
+            <strong>{vcfFile?.name || "Choose a .vcf or .vcf.gz file"}</strong>
+            <span>Sample files live in data/examples.</span>
+          </div>
+          <input type="file" accept=".vcf,.vcf.gz" onChange={(e) => setVcfFile(e.target.files?.[0] || null)} />
+        </div>
+        <div className="filter-row">
+          <label>Max records<input type="number" min="1" max="5000" value={limit} onChange={(e) => setLimit(Math.max(1, Math.min(5000, Number(e.target.value) || 1)))} /></label>
+          <button className="btn-secondary-modern" onClick={handleUpload} disabled={loading}><Icon name="file" /> {loading ? "Parsing" : "Parse VCF"}</button>
+          <button className="btn-primary-modern" onClick={handleBatchPredict} disabled={batchLoading || !records.length}><Icon name="play" /> {batchLoading ? "Scoring" : "Run batch"}</button>
+        </div>
+        {error && <div className="inline-error">{error}</div>}
+        {batchSummary && (
+          <div className="batch-summary">
+            <StatCard icon="file" label="Processed" value={batchSummary.processed} tone="blue" />
+            <StatCard icon="check" label="Predicted" value={batchSummary.predicted} tone="green" />
+            <StatCard icon="search" label="Not found" value={batchSummary.notFound} tone="amber" />
+            <StatCard icon="alert" label="Failed" value={batchSummary.failed} tone="red" />
+          </div>
+        )}
+      </section>
 
-      <div className="card shadow-sm border-0">
-        <div className="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-          <h5 className="mb-0">Parsed Variants</h5>
-          <span className="badge text-bg-light">{records.length}</span>
-        </div>
-        <div className="table-responsive">
-          <table className="table table-striped table-hover mb-0 align-middle">
-            <thead className="table-light">
-              <tr>
-                <th>Chrom</th>
-                <th>Pos</th>
-                <th>REF</th>
-                <th>ALT</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {records.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="text-center text-secondary py-4">
-                    No parsed records yet.
-                  </td>
-                </tr>
-              ) : (
-                records.map((row, idx) => (
+      <section className="content-grid two-one">
+        <div className="panel">
+          <div className="panel-head"><h3>Parsed Variants</h3><StatusPill>{records.length} records</StatusPill></div>
+          <div className="table-wrap">
+            <table className="modern-table">
+              <thead><tr><th>Variant</th><th>REF</th><th>ALT</th><th>Action</th></tr></thead>
+              <tbody>
+                {records.length === 0 ? (
+                  <tr><td colSpan="4"><EmptyState icon="upload" title="No parsed records" text="Parse a VCF file or load the demo batch." /></td></tr>
+                ) : records.slice(0, 12).map((row, idx) => (
                   <tr key={`${row.chrom}-${row.pos}-${row.ref}-${row.alt}-${idx}`}>
-                    <td>{row.chrom}</td>
-                    <td>{row.pos}</td>
+                    <td><strong>{row.chrom}:{row.pos}</strong></td>
                     <td>{row.ref}</td>
                     <td>{row.alt}</td>
-                    <td>
-                      <button className="btn btn-sm btn-outline-success" onClick={() => onSelectVariant(row)}>
-                        Use in Predict
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {batchResults.length > 0 && (
-      <div className="card shadow-sm border-0 mt-3">
-        <div className="card-header bg-white border-0 py-3">
-          <div className="d-flex justify-content-between align-items-center">
-            <h5 className="mb-0">Batch Prediction Results</h5>
-            <button
-              className="btn btn-sm btn-outline-primary"
-              onClick={() => exportBatchReportCSV(batchSummary, filteredBatchResults)}
-              disabled={!batchResults.length}
-            >
-              Download Filtered Report
-            </button>
-          </div>
-          <div className="row g-2 mt-2">
-            <div className="col-lg-4">
-              <input
-                className="form-control form-control-sm"
-                placeholder="Search batch results"
-                value={batchSearch}
-                onChange={(e) => setBatchSearch(e.target.value)}
-              />
-            </div>
-            <div className="col-lg-3">
-              <select className="form-select form-select-sm" value={batchFilter} onChange={(e) => setBatchFilter(e.target.value)}>
-                <option value="all">All results</option>
-                <option value="predicted">Predicted only</option>
-                <option value="pathogenic">Pathogenic only</option>
-                <option value="benign">Benign only</option>
-                <option value="not_found">Not found</option>
-                <option value="failed">Failed</option>
-              </select>
-            </div>
-            <div className="col-lg-3">
-              <select className="form-select form-select-sm" value={sortMode} onChange={(e) => setSortMode(e.target.value)}>
-                <option value="probability_desc">Probability high to low</option>
-                <option value="probability_asc">Probability low to high</option>
-                <option value="confidence_desc">Confidence high to low</option>
-                <option value="variant_asc">Variant A to Z</option>
-              </select>
-            </div>
-            <div className="col-lg-2">
-              <input
-                className="form-control form-control-sm"
-                type="number"
-                min="0"
-                max="100"
-                value={minConfidence}
-                onChange={(e) => setMinConfidence(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
-                title="Minimum confidence percentage"
-              />
-            </div>
-          </div>
-          <p className="small text-secondary mb-0 mt-2">
-            Showing {filteredBatchResults.length} of {batchResults.length}. Min confidence is a percentage.
-          </p>
-        </div>
-          <div className="table-responsive">
-            <table className="table table-striped table-hover mb-0 align-middle">
-              <thead className="table-light">
-                <tr>
-                  <th>Variant</th>
-                  <th>Status</th>
-                  <th>Prediction</th>
-                  <th>Probability</th>
-                  <th>Confidence</th>
-                  <th>Message</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredBatchResults.map((row, idx) => (
-                  <tr key={`${row.chrom}-${row.pos}-${row.ref}-${row.alt}-batch-${idx}`}>
-                    <td>{row.chrom}:{row.pos} {row.ref}&gt;{row.alt}</td>
-                    <td>
-                      <span className={`badge ${row.status === "predicted" ? "text-bg-success" : row.status === "not_found" ? "text-bg-warning" : "text-bg-danger"}`}>
-                        {row.status}
-                      </span>
-                    </td>
-                    <td>
-                      {row.label ? (
-                        <span className={`badge ${row.label === "PATHOGENIC" ? "text-bg-danger" : "text-bg-success"}`}>
-                          {row.label}
-                        </span>
-                      ) : "N/A"}
-                    </td>
-                    <td>{row.probability !== null && row.probability !== undefined ? `${(row.probability * 100).toFixed(2)}%` : "N/A"}</td>
-                    <td>{row.confidence_score !== null && row.confidence_score !== undefined ? `${(row.confidence_score * 100).toFixed(2)}%` : "N/A"}</td>
-                    <td>{row.message || "-"}</td>
+                    <td><button className="table-action" onClick={() => onSelectVariant(row)}>Use in Variant</button></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </div>
+        <aside className="panel">
+          <h3>Batch Controls</h3>
+          <div className="form-section compact">
+            <label>Search results<input value={batchSearch} onChange={(e) => setBatchSearch(e.target.value)} placeholder="Variant, status, label" /></label>
+            <label>Status<select value={batchFilter} onChange={(e) => setBatchFilter(e.target.value)}>
+              <option value="all">All results</option>
+              <option value="predicted">Predicted only</option>
+              <option value="pathogenic">Pathogenic only</option>
+              <option value="benign">Benign only</option>
+              <option value="not_found">Not found</option>
+              <option value="failed">Failed</option>
+            </select></label>
+            <label>Sort<select value={sortMode} onChange={(e) => setSortMode(e.target.value)}>
+              <option value="probability_desc">Probability high to low</option>
+              <option value="probability_asc">Probability low to high</option>
+              <option value="confidence_desc">Confidence high to low</option>
+              <option value="variant_asc">Variant A to Z</option>
+            </select></label>
+            <label>Min confidence<input type="number" min="0" max="100" value={minConfidence} onChange={(e) => setMinConfidence(Math.max(0, Math.min(100, Number(e.target.value) || 0)))} /></label>
+          </div>
+          <button className="btn-secondary-modern full" disabled={!batchResults.length} onClick={() => exportBatchReportCSV(batchSummary, filteredBatchResults)}><Icon name="download" /> Export filtered report</button>
+        </aside>
+      </section>
+
+      {batchResults.length > 0 && (
+        <section className="panel">
+          <div className="panel-head"><h3>Batch Results</h3><StatusPill>{filteredBatchResults.length} shown</StatusPill></div>
+          <div className="table-wrap">
+            <table className="modern-table">
+              <thead><tr><th>Variant</th><th>Status</th><th>Prediction</th><th>Triage</th><th>Probability</th><th>Confidence</th><th>Message</th></tr></thead>
+              <tbody>
+                {filteredBatchResults.map((row, idx) => (
+                  <tr key={`${row.chrom}-${row.pos}-${row.ref}-${row.alt}-batch-${idx}`}>
+                    <td><strong>{row.chrom}:{row.pos}</strong><span>{row.ref}&gt;{row.alt}</span></td>
+                    <td><StatusPill tone={row.status === "predicted" ? "green" : row.status === "not_found" ? "amber" : "red"}>{row.status}</StatusPill></td>
+                    <td>{row.label ? <StatusPill tone={row.label === "PATHOGENIC" ? "red" : "green"}>{row.label}</StatusPill> : "N/A"}</td>
+                    <td>{row.label ? triageLabel({ label: row.label, probability: row.probability, confidence: row.confidence_score }) : "N/A"}</td>
+                    <td>{pct(row.probability, 2)}</td>
+                    <td>{pct(row.confidence_score, 2)}</td>
+                    <td>{row.message || "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       )}
     </div>
   );
-}
-
-function formatPercent(value) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return "N/A";
-  return `${(Number(value) * 100).toFixed(1)}%`;
-}
-
-function formatNumber(value, digits = 1) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return "N/A";
-  return Number(value).toFixed(digits);
 }
 
 function PageMonitoring({ summary, drift, events, loading, onRefresh }) {
@@ -1153,236 +881,129 @@ function PageMonitoring({ summary, drift, events, loading, onRefresh }) {
   const metricsUrl = `${window.location.origin}/metrics`;
   const driftFeatures = drift?.features || [];
   const driftScore = typeof drift?.drift_score === "number" ? drift.drift_score : null;
-  const driftStatusClass = driftScore === null
-    ? "text-bg-secondary"
-    : driftScore > 0.5
-      ? "text-bg-danger"
-      : driftScore > 0
-        ? "text-bg-warning"
-        : "text-bg-success";
 
   return (
-    <div className="page-panel">
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <div>
-          <h4 className="mb-1">Runtime Monitoring</h4>
-          <p className="text-secondary mb-0">Live model-serving health, prediction behavior, and recent event logs.</p>
+    <div className="view-stack">
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <h3>Runtime Monitoring</h3>
+            <p>Track model health, drift status, prediction history, and operations endpoints.</p>
+          </div>
+          <button className="btn-secondary-modern" onClick={onRefresh} disabled={loading}><Icon name="refresh" /> {loading ? "Refreshing" : "Refresh"}</button>
         </div>
-        <button className="btn btn-outline-primary" onClick={onRefresh} disabled={loading}>
-          {loading ? "Refreshing..." : "Refresh"}
-        </button>
-      </div>
+        <div className="metric-grid">
+          <StatCard icon="activity" label="Logged events" value={summary?.total_predictions ?? 0} tone="blue" />
+          <StatCard icon="brain" label="Pathogenic rate" value={pct(summary?.pathogenic_rate)} tone="red" />
+          <StatCard icon="shield" label="Avg confidence" value={pct(summary?.average_confidence)} tone="green" />
+          <StatCard icon="activity" label="Avg latency" value={`${fmt(summary?.average_latency_ms)} ms`} tone="violet" />
+        </div>
+      </section>
 
-      <div className="row g-3 mb-3">
-        <div className="col-xl-3 col-md-6">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <h6 className="text-secondary">Logged Events</h6>
-              <h2 className="mb-0">{summary?.total_predictions ?? 0}</h2>
-            </div>
-          </div>
-        </div>
-        <div className="col-xl-3 col-md-6">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <h6 className="text-secondary">Pathogenic Rate</h6>
-              <h2 className="mb-0">{formatPercent(summary?.pathogenic_rate)}</h2>
-            </div>
-          </div>
-        </div>
-        <div className="col-xl-3 col-md-6">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <h6 className="text-secondary">Avg Confidence</h6>
-              <h2 className="mb-0">{formatPercent(summary?.average_confidence)}</h2>
-            </div>
-          </div>
-        </div>
-        <div className="col-xl-3 col-md-6">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <h6 className="text-secondary">Avg Latency</h6>
-              <h2 className="mb-0">{formatNumber(summary?.average_latency_ms, 1)} ms</h2>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="row g-3 mb-3">
-        <div className="col-xl-3 col-md-6">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <h6 className="text-secondary">Drift Score</h6>
-              <h2 className="mb-2">{formatPercent(driftScore)}</h2>
-              <span className={`badge ${driftStatusClass}`}>{drift?.status || "not_available"}</span>
-            </div>
-          </div>
-        </div>
-        <div className="col-xl-3 col-md-6">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <h6 className="text-secondary">Current Rows</h6>
-              <h2 className="mb-0">{drift?.current_rows ?? 0}</h2>
-            </div>
-          </div>
-        </div>
-        <div className="col-xl-3 col-md-6">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <h6 className="text-secondary">Reference Rows</h6>
-              <h2 className="mb-0">{drift?.reference_rows ?? "N/A"}</h2>
-            </div>
-          </div>
-        </div>
-        <div className="col-xl-3 col-md-6">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-body">
-              <h6 className="text-secondary">Drifted Features</h6>
-              <h2 className="mb-0">{drift?.drifted_features ?? 0}/{drift?.monitored_features ?? 0}</h2>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="row g-3 mb-3">
-        <div className="col-xl-4">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-header bg-white border-0 py-3">
-              <h5 className="mb-0">Model Service</h5>
-            </div>
-            <div className="card-body">
-              <p className="mb-2"><span className="fw-semibold">API:</span> {summary?.api_status || "unknown"}</p>
-              <p className="mb-2"><span className="fw-semibold">Model:</span> {summary?.model_status || "unknown"}</p>
-              <p className="mb-2"><span className="fw-semibold">Failures:</span> {summary?.failed_predictions ?? 0}</p>
-              <p className="mb-0"><span className="fw-semibold">Low Confidence:</span> {summary?.low_confidence_predictions ?? 0}</p>
-            </div>
-          </div>
-        </div>
-        <div className="col-xl-4">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-header bg-white border-0 py-3">
-              <h5 className="mb-0">Prediction Sources</h5>
-            </div>
-            <div className="card-body">
-              {Object.entries(summary?.by_source || {}).length === 0 ? (
-                <p className="text-secondary mb-0">No events yet.</p>
-              ) : (
-                Object.entries(summary.by_source).map(([source, count]) => (
-                  <div key={source} className="d-flex justify-content-between mb-2">
-                    <span>{source}</span>
-                    <span className="badge text-bg-light">{count}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="col-xl-4">
-          <div className="card shadow-sm border-0 h-100">
-            <div className="card-header bg-white border-0 py-3">
-              <h5 className="mb-0">Monitoring Tools</h5>
-            </div>
-            <div className="card-body d-grid gap-2">
-              <a className="btn btn-outline-primary" href={grafanaUrl} target="_blank" rel="noreferrer">Open Grafana</a>
-              <a className="btn btn-outline-secondary" href={prometheusUrl} target="_blank" rel="noreferrer">Open Prometheus</a>
-              <a className="btn btn-outline-dark" href={metricsUrl} target="_blank" rel="noreferrer">View Raw Metrics</a>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="card shadow-sm border-0 mb-3">
-        <div className="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-          <h5 className="mb-0">Feature Drift</h5>
-          <span className="badge text-bg-light">{drift?.checked_at ? new Date(drift.checked_at).toLocaleString() : "pending"}</span>
-        </div>
-        <div className="table-responsive">
-          <table className="table table-striped table-hover mb-0 align-middle">
-            <thead className="table-light">
-              <tr>
-                <th>Feature</th>
-                <th>Status</th>
-                <th>Reference Mean</th>
-                <th>Current Mean</th>
-                <th>Delta</th>
-                <th>Threshold</th>
-              </tr>
-            </thead>
-            <tbody>
-              {driftFeatures.length === 0 ? (
-                <tr>
-                  <td colSpan="6" className="text-center text-secondary py-4">{drift?.message || "No drift summary yet."}</td>
-                </tr>
-              ) : (
-                driftFeatures.map((row) => (
+      <section className="content-grid two-one">
+        <div className="panel">
+          <div className="panel-head"><h3>Feature Drift</h3><StatusPill tone={driftScore && driftScore > 0 ? "amber" : "green"}>{drift?.status || "not_available"}</StatusPill></div>
+          <div className="table-wrap">
+            <table className="modern-table">
+              <thead><tr><th>Feature</th><th>Status</th><th>Reference</th><th>Current</th><th>Delta</th><th>Threshold</th></tr></thead>
+              <tbody>
+                {driftFeatures.length === 0 ? (
+                  <tr><td colSpan="6"><EmptyState icon="activity" title="No drift summary" text={drift?.message || "Run predictions and drift checks to populate this view."} /></td></tr>
+                ) : driftFeatures.map((row) => (
                   <tr key={row.feature}>
-                    <td>{row.feature}</td>
-                    <td>
-                      <span className={`badge ${row.drifted ? "text-bg-danger" : "text-bg-success"}`}>
-                        {row.drifted ? "Drifted" : "Stable"}
-                      </span>
-                    </td>
-                    <td>{formatNumber(row.reference_mean, 4)}</td>
-                    <td>{formatNumber(row.current_mean, 4)}</td>
-                    <td>{formatNumber(row.mean_delta, 4)}</td>
-                    <td>{formatNumber(row.threshold, 4)}</td>
+                    <td><strong>{row.feature}</strong></td>
+                    <td><StatusPill tone={row.drifted ? "red" : "green"}>{row.drifted ? "Drifted" : "Stable"}</StatusPill></td>
+                    <td>{fmt(row.reference_mean, 4)}</td>
+                    <td>{fmt(row.current_mean, 4)}</td>
+                    <td>{fmt(row.mean_delta, 4)}</td>
+                    <td>{fmt(row.threshold, 4)}</td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+        <aside className="panel">
+          <h3>Operations</h3>
+          <div className="review-list">
+            <div><span>API</span><strong>{summary?.api_status || "unknown"}</strong></div>
+            <div><span>Model</span><strong>{summary?.model_status || "unknown"}</strong></div>
+            <div><span>Failures</span><strong>{summary?.failed_predictions ?? 0}</strong></div>
+            <div><span>Low confidence</span><strong>{summary?.low_confidence_predictions ?? 0}</strong></div>
+          </div>
+          <div className="action-row stacked mt-3">
+            <a className="btn-secondary-modern" href={grafanaUrl} target="_blank" rel="noreferrer">Open Grafana</a>
+            <a className="btn-secondary-modern" href={prometheusUrl} target="_blank" rel="noreferrer">Open Prometheus</a>
+            <a className="btn-ghost-modern" href={metricsUrl} target="_blank" rel="noreferrer">Raw metrics</a>
+          </div>
+        </aside>
+      </section>
 
-      <div className="card shadow-sm border-0">
-        <div className="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-          <h5 className="mb-0">Recent Monitoring Events</h5>
-          <span className="badge text-bg-light">{latestEvents.length}</span>
-        </div>
-        <div className="table-responsive">
-          <table className="table table-striped table-hover mb-0 align-middle">
-            <thead className="table-light">
-              <tr>
-                <th>Time</th>
-                <th>Endpoint</th>
-                <th>Variant</th>
-                <th>Status</th>
-                <th>Prediction</th>
-                <th>Confidence</th>
-                <th>Latency</th>
-              </tr>
-            </thead>
+      <section className="panel">
+        <div className="panel-head"><h3>Recent Events</h3><StatusPill>{latestEvents.length} events</StatusPill></div>
+        <div className="table-wrap">
+          <table className="modern-table">
+            <thead><tr><th>Time</th><th>Endpoint</th><th>Variant</th><th>Status</th><th>Prediction</th><th>Confidence</th><th>Latency</th></tr></thead>
             <tbody>
               {latestEvents.length === 0 ? (
-                <tr>
-                  <td colSpan="7" className="text-center text-secondary py-4">No monitoring events yet.</td>
+                <tr><td colSpan="7"><EmptyState title="No monitoring events" text="Run predictions to populate event logs." /></td></tr>
+              ) : latestEvents.map((row, idx) => (
+                <tr key={`${row.timestamp}-${idx}`}>
+                  <td>{row.timestamp ? new Date(row.timestamp).toLocaleString() : "N/A"}</td>
+                  <td>{row.endpoint || "unknown"}</td>
+                  <td>{row.chrom && row.pos ? `${row.chrom}:${row.pos} ${row.ref || ""}>${row.alt || ""}` : "N/A"}</td>
+                  <td><StatusPill tone={row.status === "success" ? "green" : "red"}>{row.status || "unknown"}</StatusPill></td>
+                  <td>{row.prediction === 1 ? "PATHOGENIC" : row.prediction === 0 ? "BENIGN" : "N/A"}</td>
+                  <td>{pct(row.confidence_score)}</td>
+                  <td>{fmt(row.latency_ms)} ms</td>
                 </tr>
-              ) : (
-                latestEvents.map((row, idx) => (
-                  <tr key={`${row.timestamp}-${idx}`}>
-                    <td>{row.timestamp ? new Date(row.timestamp).toLocaleString() : "N/A"}</td>
-                    <td>{row.endpoint || "unknown"}</td>
-                    <td>{row.chrom && row.pos ? `${row.chrom}:${row.pos} ${row.ref || ""}>${row.alt || ""}` : "N/A"}</td>
-                    <td>
-                      <span className={`badge ${row.status === "success" ? "text-bg-success" : "text-bg-danger"}`}>
-                        {row.status || "unknown"}
-                      </span>
-                    </td>
-                    <td>{row.prediction === 1 ? "PATHOGENIC" : row.prediction === 0 ? "BENIGN" : "N/A"}</td>
-                    <td>{formatPercent(row.confidence_score)}</td>
-                    <td>{formatNumber(row.latency_ms, 1)} ms</td>
-                  </tr>
-                ))
-              )}
+              ))}
             </tbody>
           </table>
         </div>
-      </div>
+      </section>
+    </div>
+  );
+}
+
+function PageEvidence({ modelInfo }) {
+  const features = modelInfo?.input_features || [];
+  return (
+    <div className="view-stack">
+      <section className="hero-band evidence-hero">
+        <div>
+          <p className="eyebrow">Model evidence</p>
+          <h2>Annotation-driven prioritization with model provenance and explainability.</h2>
+          <p>The model aggregates SIFT, PolyPhen, CADD, population frequency, and engineered genomic context into an operational triage workflow.</p>
+        </div>
+        <StatusPill tone={modelInfo?.model_status === "loaded" ? "green" : "amber"}>{modelInfo?.model_status || "unknown"}</StatusPill>
+      </section>
+
+      <section className="content-grid split">
+        <div className="panel">
+          <div className="panel-head"><h3>SHAP Feature Importance</h3></div>
+          <img className="explainability-plot" src="/figures/shap_bar_plot.png" alt="SHAP bar plot showing global feature importance" />
+        </div>
+        <div className="panel">
+          <div className="panel-head"><h3>SHAP Summary</h3></div>
+          <img className="explainability-plot explainability-plot-tall" src="/figures/shap_summary_plot.png" alt="SHAP summary plot showing feature effects across samples" />
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head"><h3>Feature Contract</h3><StatusPill>{features.length} features</StatusPill></div>
+        {features.length === 0 ? <EmptyState title="Feature metadata unavailable" text="The API has not returned model feature metadata yet." /> : (
+          <div className="feature-chip-grid">
+            {features.map((feature, idx) => <span key={feature} className="feature-chip"><small>{idx + 1}</small>{feature}</span>)}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
 
 export default function App() {
+  const [authed, setAuthed] = useState(() => sessionStorage.getItem(AUTH_KEY) === "true");
   const [page, setPage] = useState("overview");
   const [form, setForm] = useState(INITIAL_FORM);
   const [health, setHealth] = useState(null);
@@ -1415,6 +1036,7 @@ export default function App() {
   }, [history]);
 
   useEffect(() => {
+    if (!authed) return;
     const loadMeta = async () => {
       try {
         const [healthRes, infoRes] = await Promise.all([getHealth(), getModelInfo()]);
@@ -1425,7 +1047,7 @@ export default function App() {
       }
     };
     loadMeta();
-  }, []);
+  }, [authed]);
 
   const loadMonitoring = async () => {
     setMonitoringLoading(true);
@@ -1446,21 +1068,16 @@ export default function App() {
   };
 
   useEffect(() => {
-    loadMonitoring();
-  }, []);
+    if (authed) loadMonitoring();
+  }, [authed]);
 
   const dashboard = useMemo(() => {
     const total = history.length;
     const pathogenic = history.filter((row) => row.label === "PATHOGENIC").length;
     const pathogenicRate = total ? (pathogenic / total) * 100 : 0;
     const withProba = history.filter((row) => row.probability !== null && row.probability !== undefined);
-    const avgProbability = withProba.length
-      ? (withProba.reduce((acc, row) => acc + row.probability, 0) / withProba.length) * 100
-      : 0;
-    const byChromMap = {};
-    for (const row of history) byChromMap[row.chrom] = (byChromMap[row.chrom] || 0) + 1;
-    const byChrom = Object.entries(byChromMap).sort((a, b) => b[1] - a[1]).slice(0, 6);
-    return { total, pathogenic, pathogenicRate, avgProbability, byChrom };
+    const avgProbability = withProba.length ? (withProba.reduce((acc, row) => acc + row.probability, 0) / withProba.length) * 100 : 0;
+    return { total, pathogenic, pathogenicRate, avgProbability };
   }, [history]);
 
   const visibleHistory = useMemo(() => {
@@ -1486,7 +1103,6 @@ export default function App() {
         ref: form.ref.trim().toUpperCase(),
         alt: form.alt.trim().toUpperCase()
       });
-
       if (!response.found || !response.data?.length) {
         setLookupStatus("not_found");
         setLookupMessage(response.message || "Variant not found in feature store.");
@@ -1515,7 +1131,6 @@ export default function App() {
       setAppError("Variant not found in database: SIFT, PolyPhen, CADD, and ALT_FREQ are required.");
       return;
     }
-
     setPredictLoading(true);
     try {
       const payload = buildPredictionPayload(form);
@@ -1564,14 +1179,11 @@ export default function App() {
     setLookupMessage("");
     setFetchedRow(null);
     setAppError("");
-    setPage("predict");
   };
 
   const handleSetReviewStatus = (id, reviewStatus) => {
     setHistory((prev) => prev.map((row) => (row.id === id ? { ...row, reviewStatus } : row)));
-    if (lastPrediction?.id === id) {
-      setLastPrediction((prev) => (prev ? { ...prev, reviewStatus } : prev));
-    }
+    if (lastPrediction?.id === id) setLastPrediction((prev) => (prev ? { ...prev, reviewStatus } : prev));
   };
 
   const handleSelectVcfVariant = (row) => {
@@ -1610,48 +1222,26 @@ export default function App() {
     loadMonitoring();
   };
 
-  const navItems = [
-    ["overview", "Overview"],
-    ["predict", "Predict"],
-    ["vcf", "VCF Lab"],
-    ["monitoring", "Monitoring"],
-    ["explainability", "Explainability"]
-  ];
+  const logout = () => {
+    sessionStorage.removeItem(AUTH_KEY);
+    setAuthed(false);
+  };
+
+  if (!authed) return <LoginScreen onLogin={() => setAuthed(true)} />;
 
   return (
-    <div className="bg-body-tertiary min-vh-100">
-      <nav className="navbar navbar-expand-lg bg-dark navbar-dark shadow-sm">
-        <div className="container-fluid px-4">
-          <span className="navbar-brand mb-0 h1">GenoPredict Clinical UI</span>
-          <span className="badge text-bg-light">API: {health?.api_status || "unknown"}</span>
-        </div>
-      </nav>
-
-      <div className="container-fluid px-4 py-4">
-        <ul className="nav nav-pills bg-white rounded-3 shadow-sm p-2 mb-3">
-          {navItems.map(([key, label]) => (
-            <li className="nav-item" key={key}>
-              <button
-                type="button"
-                className={`nav-link ${page === key ? "active" : ""}`}
-                onClick={() => setPage(key)}
-              >
-                {label}
-              </button>
-            </li>
-          ))}
-          <li className="ms-auto d-flex gap-2">
-            <button className="btn btn-sm btn-outline-primary" onClick={() => exportHistoryCSV(history)}>
-              Export History
-            </button>
-            <button className="btn btn-sm btn-outline-danger" onClick={() => setHistory([])}>
-              Clear
-            </button>
-          </li>
-        </ul>
-
-        {appError && <div className="alert alert-danger">{appError}</div>}
-
+    <AppShell
+      page={page}
+      setPage={setPage}
+      health={health}
+      modelInfo={modelInfo}
+      history={history}
+      onLogout={logout}
+      onExportHistory={() => exportHistoryCSV(history)}
+      onClearHistory={() => setHistory([])}
+    >
+      {appError && <div className="app-alert"><Icon name="alert" /> {appError}</div>}
+      <div className="page-transition" key={page}>
         {page === "overview" && (
           <PageOverview
             health={health}
@@ -1664,6 +1254,7 @@ export default function App() {
             historyStatus={historyStatus}
             setHistoryStatus={setHistoryStatus}
             onSetReviewStatus={handleSetReviewStatus}
+            onOpenPredict={() => setPage("predict")}
           />
         )}
         {page === "predict" && (
@@ -1684,17 +1275,9 @@ export default function App() {
           />
         )}
         {page === "vcf" && <PageVcf onSelectVariant={handleSelectVcfVariant} onBatchResults={handleBatchResults} />}
-        {page === "monitoring" && (
-          <PageMonitoring
-            summary={monitoringSummary}
-            drift={monitoringDrift}
-            events={monitoringEvents}
-            loading={monitoringLoading}
-            onRefresh={loadMonitoring}
-          />
-        )}
-        {page === "explainability" && <PageExplainability modelInfo={modelInfo} />}
+        {page === "monitoring" && <PageMonitoring summary={monitoringSummary} drift={monitoringDrift} events={monitoringEvents} loading={monitoringLoading} onRefresh={loadMonitoring} />}
+        {page === "evidence" && <PageEvidence modelInfo={modelInfo} />}
       </div>
-    </div>
+    </AppShell>
   );
 }

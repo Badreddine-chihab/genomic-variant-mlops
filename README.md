@@ -43,6 +43,8 @@ Regenerate them with:
 Additional project documentation:
 
 - [Model card](docs/MODEL_CARD.md)
+- [Machine learning validation](docs/ML_VALIDATION.md)
+- [Model benchmark](docs/MODEL_BENCHMARK.md)
 - [Feature schema](docs/FEATURE_SCHEMA.md)
 - [Argo CD deployment](docs/ARGOCD_DEPLOYMENT.md)
 - [AWS deployment](docs/AWS_DEPLOYMENT.md)
@@ -57,6 +59,11 @@ Additional project documentation:
    `cd frontend && npm install && npm run dev -- --host 0.0.0.0 --port 3000`
 4. Open:
    `http://localhost:3000`
+
+Demo UI login:
+
+- Username: `admin`
+- Password: `admin`
 
 The Vite dev server proxies `/api` and `/metrics` to `http://localhost:8000`,
 so the browser uses the same relative API paths as the Docker frontend.
@@ -211,20 +218,22 @@ The separate DevSecOps workflow adds:
    `docker compose up --build`
 2. Open the UI:
    `http://localhost:3000`
-3. On Predict, try the default benign feature-store variant:
+3. Sign in with the demo credentials:
+   `admin` / `admin`
+4. On Variant, try the default benign feature-store variant:
    `11:209271 C>A`
-4. For a manual pathogenic example, use:
+5. For a manual pathogenic example, use:
    `17:43071077 C>T`, `SIFT=0.01`, `PolyPhen=0.98`, `CADD=35`, `ALT_FREQ=0.00001`
-5. On VCF Lab, click **Load Demo Batch**, then **Run Batch Prediction**.
+6. On VCF Lab, click **Demo batch**, then **Run batch**.
    The demo batch includes feature-store hits such as:
    - `11:298524 A>C`
    - `11:299372 G>A`
    - `11:299372 G>C`
    - `11:299391 G>A`
    - `11:533467 C>G`
-6. Open Monitoring in the frontend to see prediction history, drift score, and feature drift details.
-7. Open Explainability in the frontend to review SHAP plots and the model input feature list.
-8. Open Grafana at `http://localhost:3001` for dashboards and provisioned alerts.
+7. Open Monitoring in the frontend to see prediction history, drift score, and feature drift details.
+8. Open Evidence in the frontend to review SHAP plots and the model input feature list.
+9. Open Grafana at `http://localhost:3001` for dashboards and provisioned alerts.
 
 There is no AWS deployment step. For a VPS deployment, copy the repository or pull the branch on the server and run:
 
