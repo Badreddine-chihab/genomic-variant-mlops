@@ -65,7 +65,7 @@ jobs:
           exit-code: "0"
 
       - name: Upload Trivy filesystem SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: trivy-filesystem.sarif
@@ -85,7 +85,7 @@ jobs:
           exit-code: "0"
 
       - name: Upload Trivy API image SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: trivy-api-image.sarif
@@ -102,7 +102,7 @@ jobs:
           exit-code: "0"
 
       - name: Upload Trivy MLflow image SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: trivy-mlflow-image.sarif
@@ -119,7 +119,7 @@ jobs:
           exit-code: "0"
 
       - name: Upload Trivy frontend image SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         with:
           sarif_file: trivy-frontend-image.sarif
